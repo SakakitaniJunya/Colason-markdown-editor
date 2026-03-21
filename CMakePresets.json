@@ -1,0 +1,26 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "default",
+            "generator": "Visual Studio 18 2026",
+            "architecture": { "value": "x64" },
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_TARGET_TRIPLET": "x64-windows"
+            }
+        },
+        {
+            "name": "debug",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        }
+    ],
+    "buildPresets": [
+        { "name": "release", "configurePreset": "default", "configuration": "Release" },
+        { "name": "debug", "configurePreset": "debug", "configuration": "Debug" }
+    ]
+}

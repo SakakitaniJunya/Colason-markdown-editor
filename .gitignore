@@ -1,0 +1,14 @@
+build/
+CMakeFiles/
+editor/node_modules/
+editor/dist/
+*.user
+CMakeSettings.json
+.vs/
+.vscode/
+.claude/
+*.obj
+*.exe
+*.pdb
+*.ilk
+aqtinstall.log

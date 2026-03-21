@@ -1,0 +1,12 @@
+{
+    "name": "colason",
+    "version-string": "0.1.0",
+    "description": "Typora-compatible WYSIWYG Markdown editor",
+    "dependencies": [
+        { "name": "qtbase", "features": ["widgets", "gui", "concurrent"] },
+        "nlohmann-json",
+        "spdlog",
+        "gtest"
+    ],
+    "$comment-optional": "Phase 2: Add qtwebengine, qtwebchannel, qtsvg, qt5compat for full editor support"
+}

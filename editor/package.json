@@ -1,0 +1,50 @@
+{
+  "name": "colason-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.1",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.12.2",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/search": "^6.6.0",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.40.0",
+    "@replit/codemirror-vim": "^6.3.0",
+    "@tiptap/core": "^2.11.0",
+    "@tiptap/extension-code-block-lowlight": "^2.11.0",
+    "@tiptap/extension-highlight": "^2.11.0",
+    "@tiptap/extension-image": "^2.11.0",
+    "@tiptap/extension-link": "^2.11.0",
+    "@tiptap/extension-placeholder": "^2.11.0",
+    "@tiptap/extension-subscript": "^2.11.0",
+    "@tiptap/extension-superscript": "^2.11.0",
+    "@tiptap/extension-table": "^2.11.0",
+    "@tiptap/extension-table-cell": "^2.11.0",
+    "@tiptap/extension-table-header": "^2.11.0",
+    "@tiptap/extension-table-row": "^2.11.0",
+    "@tiptap/extension-task-item": "^2.11.0",
+    "@tiptap/extension-task-list": "^2.11.0",
+    "@tiptap/extension-typography": "^2.11.0",
+    "@tiptap/extension-underline": "^2.11.0",
+    "@tiptap/pm": "^2.11.0",
+    "@tiptap/starter-kit": "^2.11.0",
+    "@types/katex": "^0.16.8",
+    "codemirror": "^6.0.2",
+    "highlight.js": "^11.10.0",
+    "katex": "^0.16.40",
+    "lowlight": "^3.1.0",
+    "mermaid": "^11.13.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  }
+}

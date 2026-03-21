@@ -1,0 +1,13 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/colason.svg</file>
+        <file>icons/chevron-right-dark.svg</file>
+        <file>icons/chevron-down-dark.svg</file>
+        <file>icons/chevron-right-light.svg</file>
+        <file>icons/chevron-down-light.svg</file>
+        <file>icons/file.svg</file>
+        <file>icons/file-text.svg</file>
+        <file>icons/folder.svg</file>
+        <file>icons/folder-open.svg</file>
+    </qresource>
+</RCC>
