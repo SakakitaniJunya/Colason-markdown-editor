@@ -36,7 +36,6 @@ signals:
     void wordCountChanged(int words, int chars);
     void documentDirty(bool dirty);
     void cursorPositionChanged(int line, int col);
-    void headingsChanged(const QString& json);
     void contentReceived(const QString& html);
 
 public slots:

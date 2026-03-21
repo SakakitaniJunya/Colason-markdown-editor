@@ -76,6 +76,7 @@ MainWindow::MainWindow(QWidget* parent)
             m_titleBarShown = false;
         }
     });
+    m_themeManager = new ThemeManager(this);
     setupWebEngine();
     setupManagers();
     setupConnections();
@@ -99,6 +100,12 @@ MainWindow::MainWindow(QWidget* parent)
 
     // Apply saved theme or auto-detect
     applyPreferences();
+
+    // Restore last opened folder
+    const auto folders = m_recentFiles->recentFolders();
+    if (!folders.isEmpty() && QDir(folders.first()).exists()) {
+        m_sidebar->setRootPath(folders.first());
+    }
 
     // Check for recoverable drafts
     QTimer::singleShot(500, this, &MainWindow::checkDraftRecovery);
@@ -132,8 +139,8 @@ void MainWindow::setupUI()
     m_splitter->addWidget(m_editorPlaceholder);
 #endif
 
-    // Splitter sizes: sidebar 220px, editor rest
-    m_splitter->setSizes({220, 1000});
+    // Splitter sizes: sidebar 240px, editor rest
+    m_splitter->setSizes({240, 1000});
     m_splitter->setStretchFactor(0, 0);
     m_splitter->setStretchFactor(1, 1);
     m_splitter->setCollapsible(0, true);   // Sidebar collapsible
@@ -144,23 +151,23 @@ void MainWindow::setupUI()
     m_sidebar->setMinimumWidth(160);
     m_sidebar->setMaximumWidth(400);
 
-    // Panel switching shortcuts: 1=Documents, 2=Files, 3=Outline
+    // Panel switching shortcuts: 1=Files, 2=Outline, 3=Documents
     auto* shortcut1 = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_1), this);
     connect(shortcut1, &QShortcut::activated, this, [this]() {
         if (!m_sidebarVisible) toggleSidebar();
-        m_sidebar->switchToPanel(0);  // Documents
+        m_sidebar->switchToPanel(0);  // Files
     });
 
     auto* shortcut2 = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_2), this);
     connect(shortcut2, &QShortcut::activated, this, [this]() {
         if (!m_sidebarVisible) toggleSidebar();
-        m_sidebar->switchToPanel(1);  // Files
+        m_sidebar->switchToPanel(1);  // Outline
     });
 
     auto* shortcut3 = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_3), this);
     connect(shortcut3, &QShortcut::activated, this, [this]() {
         if (!m_sidebarVisible) toggleSidebar();
-        m_sidebar->switchToPanel(2);  // Outline
+        m_sidebar->switchToPanel(2);  // Documents
     });
 
     // QuickOpen shortcut
@@ -222,6 +229,43 @@ void MainWindow::setupWebEngine()
     settings->setAttribute(QWebEngineSettings::JavascriptEnabled, true);
     settings->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
 
+    // Determine initial theme and inject CSS BEFORE page loads to prevent FOUC
+    QString themeName = m_prefs->autoDetectTheme()
+        ? m_themeManager->detectSystemThemeName()
+        : m_prefs->theme();
+    QString themeCss = m_themeManager->themeCSS(themeName);
+    bool isDark = m_themeManager->isDarkTheme(themeName);
+
+    // Set page background color to match theme (prevents white flash)
+    m_editorView->page()->setBackgroundColor(isDark ? QColor("#1e1e1e") : QColor("#ffffff"));
+
+    // Inject theme CSS at DocumentReady — DOM exists, runs before page display
+    if (!themeCss.isEmpty()) {
+        QJsonArray arr;
+        arr.append(themeCss);
+        QString jsonCss = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+        QString jsonStr = jsonCss.mid(1, jsonCss.size() - 2);
+
+        QString jsSource = QString(
+            "(function(){"
+            "var t=document.head||document.documentElement;"
+            "if(!t) return;"
+            "var el=document.createElement('style');"
+            "el.id='colason-theme';"
+            "el.textContent=%1;"
+            "t.appendChild(el);"
+            "})()"
+        ).arg(jsonStr);
+
+        QWebEngineScript script;
+        script.setName("colason-theme-init");
+        script.setSourceCode(jsSource);
+        script.setInjectionPoint(QWebEngineScript::DocumentReady);
+        script.setWorldId(QWebEngineScript::MainWorld);
+        script.setRunsOnSubFrames(false);
+        m_editorView->page()->scripts().insert(script);
+    }
+
     loadEditorPage();
 #endif
 }
@@ -234,7 +278,7 @@ void MainWindow::setupManagers()
     m_globalSearch = new GlobalSearchManager(this);
     m_imageManager = new ImageManager(this);
     m_exportManager = new ExportManager(this);
-    m_themeManager = new ThemeManager(this);
+    // m_themeManager is created earlier (before setupWebEngine) for early CSS injection
 
     // AutoSave settings from preferences
     m_autoSaveManager->setEnabled(m_prefs->autoSaveEnabled());
@@ -275,7 +319,7 @@ void MainWindow::setupConnections()
         updateTitle();
     });
 
-    connect(m_editorBridge, &EditorBridge::headingsChanged, this,
+    connect(m_outlineBridge, &OutlineBridge::headingsChanged, this,
             [this](const QString& json) {
                 m_sidebar->updateOutline(json);
             });
@@ -702,6 +746,7 @@ void MainWindow::injectThemeCSS(const QString& css)
     // appendChild moves existing element to end of <head>, ensuring highest cascade priority
     QString js = QString(
         "(function(){"
+        "if(!document.head) return;"
         "var el=document.getElementById('colason-theme');"
         "if(!el){el=document.createElement('style');el.id='colason-theme';}"
         "el.textContent=%1;"

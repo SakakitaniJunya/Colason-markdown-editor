@@ -353,7 +353,6 @@ classDiagram
         +isFocusMode() bool
         +isTypewriterMode() bool
         +contentChanged(markdown: QString)* signal
-        +headingsChanged(json: QString)* signal
         +cursorPositionChanged(line: int, col: int)* signal
         +wordCountChanged(words: int, chars: int)* signal
         +documentDirty(dirty: bool)* signal
