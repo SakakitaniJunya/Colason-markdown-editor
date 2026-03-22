@@ -28,7 +28,7 @@ QString ExportManager::wrapHtmlWithTheme(const QString& htmlContent, const QStri
         "<!DOCTYPE html><html><head>"
         "<meta charset=\"UTF-8\">"
         "<style>"
-        "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; "
+        "body { font-family: 'Amplitude', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; "
         "font-size: 16px; line-height: 1.6; color: #333; max-width: 860px; margin: 0 auto; padding: 40px 30px; }"
         "h1 { font-size: 2em; font-weight: 700; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }"
         "h2 { font-size: 1.5em; font-weight: 600; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }"

@@ -19,19 +19,19 @@ void SidebarContainer::setupUI()
     m_tabWidget = new QTabWidget(this);
     m_tabWidget->setTabPosition(QTabWidget::North);
     m_tabWidget->setDocumentMode(true);
-    // Tab bar visible for panel switching
+    m_tabWidget->tabBar()->setExpanding(true);
 
-    // Document list tab (index 0) - primary tab like Typora
-    m_documentList = new DocumentListPanel(this);
-    m_tabWidget->addTab(m_documentList, QString::fromUtf8("\346\226\207\346\233\270"));  // "文書"
-
-    // File Explorer tab (index 1)
+    // File Explorer tab (index 0)
     m_fileExplorer = new FileExplorerPanel(this);
     m_tabWidget->addTab(m_fileExplorer, tr("Files"));
 
-    // Outline tab (index 2)
+    // Outline tab (index 1)
     m_outlinePanel = new OutlinePanel(this);
     m_tabWidget->addTab(m_outlinePanel, tr("Outline"));
+
+    // Document list tab (index 2) - rightmost tab
+    m_documentList = new DocumentListPanel(this);
+    m_tabWidget->addTab(m_documentList, tr("Documents"));
 
     layout->addWidget(m_tabWidget);
 

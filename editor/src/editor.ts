@@ -27,6 +27,7 @@ import {
   notifyCursorPosition,
 } from './bridge';
 import { simpleMarkdownToHtml } from './source-mode';
+import { setupTableContextMenu } from './table-context-menu';
 
 const lowlight = createLowlight(common);
 
@@ -116,6 +117,8 @@ export function createEditor(element: HTMLElement): Editor {
     const converted = simpleMarkdownToHtml(text);
     editor.commands.insertContent(converted);
   });
+
+  setupTableContextMenu(editor);
 
   lastContent = editor.getHTML();
   return editor;

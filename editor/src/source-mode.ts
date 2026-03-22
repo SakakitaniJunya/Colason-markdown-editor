@@ -7,6 +7,7 @@ import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@cod
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import type { Editor } from '@tiptap/core';
 import { getKeybindingExtension, type KeybindingMode } from './keybindings';
+import { Marked, type TokenizerAndRendererExtension, type Tokens } from 'marked';
 
 let cmView: EditorView | null = null;
 let isSourceMode = false;
@@ -243,148 +244,108 @@ function tableToMarkdown(table: HTMLElement): string {
   return lines.join('\n');
 }
 
-// Simple markdown to HTML conversion
+// === Markdown to HTML conversion using marked ===
+
+// Custom inline extensions for TipTap-specific syntax
+const highlightExtension: TokenizerAndRendererExtension = {
+  name: 'highlight',
+  level: 'inline',
+  start(src: string) {
+    return src.indexOf('==');
+  },
+  tokenizer(src: string) {
+    const match = src.match(/^==(.+?)==/);
+    if (match) {
+      return {
+        type: 'highlight',
+        raw: match[0],
+        text: match[1],
+        tokens: this.lexer.inlineTokens(match[1]),
+      };
+    }
+  },
+  renderer(token) {
+    return `<mark>${this.parser.parseInline(token.tokens!)}</mark>`;
+  },
+};
+
+const superscriptExtension: TokenizerAndRendererExtension = {
+  name: 'superscript',
+  level: 'inline',
+  start(src: string) {
+    return src.indexOf('^');
+  },
+  tokenizer(src: string) {
+    const match = src.match(/^\^([^\s^][^^]*?)\^/);
+    if (match) {
+      return {
+        type: 'superscript',
+        raw: match[0],
+        text: match[1],
+        tokens: this.lexer.inlineTokens(match[1]),
+      };
+    }
+  },
+  renderer(token) {
+    return `<sup>${this.parser.parseInline(token.tokens!)}</sup>`;
+  },
+};
+
+const subscriptExtension: TokenizerAndRendererExtension = {
+  name: 'subscript',
+  level: 'inline',
+  start(src: string) {
+    // Find single ~ not followed by another ~
+    const idx = src.search(/~(?!~)/);
+    return idx >= 0 ? idx : -1;
+  },
+  tokenizer(src: string) {
+    const match = src.match(/^~(?!~)([^\s~][^~]*?)~(?!~)/);
+    if (match) {
+      return {
+        type: 'subscript',
+        raw: match[0],
+        text: match[1],
+        tokens: this.lexer.inlineTokens(match[1]),
+      };
+    }
+  },
+  renderer(token) {
+    return `<sub>${this.parser.parseInline(token.tokens!)}</sub>`;
+  },
+};
+
+// Create a configured marked instance
+const markedInstance = new Marked({
+  gfm: true,
+  breaks: false,
+  extensions: [highlightExtension, superscriptExtension, subscriptExtension],
+  renderer: {
+    // Produce TipTap-compatible task list HTML
+    list(token: Tokens.List) {
+      const isTaskList = token.items.some((item: Tokens.ListItem) => item.task);
+      const tag = token.ordered ? 'ol' : 'ul';
+      const startAttr = token.ordered && token.start !== 1 ? ` start="${token.start}"` : '';
+      const typeAttr = isTaskList ? ' data-type="taskList"' : '';
+      let body = '';
+      for (const item of token.items) {
+        body += this.listitem(item);
+      }
+      return `<${tag}${startAttr}${typeAttr}>${body}</${tag}>`;
+    },
+    listitem(item: Tokens.ListItem) {
+      let text = this.parser.parse(item.tokens);
+      if (item.task) {
+        const checkedAttr = item.checked ? 'true' : 'false';
+        // Remove checkbox that marked auto-inserts
+        text = text.replace(/<input[^>]*>/, '');
+        return `<li data-type="taskItem" data-checked="${checkedAttr}">${text}</li>`;
+      }
+      return `<li>${text}</li>`;
+    },
+  },
+});
+
 export function simpleMarkdownToHtml(md: string): string {
-  const lines = md.split('\n');
-  let html = '';
-  let i = 0;
-  let inCodeBlock = false;
-  let codeLang = '';
-  let codeContent = '';
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // Code blocks
-    if (line.startsWith('```')) {
-      if (!inCodeBlock) {
-        inCodeBlock = true;
-        codeLang = line.slice(3).trim();
-        codeContent = '';
-      } else {
-        html += `<pre><code class="language-${codeLang}">${escapeHtml(codeContent)}</code></pre>`;
-        inCodeBlock = false;
-      }
-      i++;
-      continue;
-    }
-
-    if (inCodeBlock) {
-      codeContent += (codeContent ? '\n' : '') + line;
-      i++;
-      continue;
-    }
-
-    // Empty line
-    if (line.trim() === '') {
-      i++;
-      continue;
-    }
-
-    // Headings
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const text = inlineFormat(headingMatch[2]);
-      html += `<h${level}>${text}</h${level}>`;
-      i++;
-      continue;
-    }
-
-    // Horizontal rule
-    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) {
-      html += '<hr>';
-      i++;
-      continue;
-    }
-
-    // Blockquote
-    if (line.startsWith('> ')) {
-      let quoteContent = '';
-      while (i < lines.length && lines[i].startsWith('> ')) {
-        quoteContent += lines[i].slice(2) + '\n';
-        i++;
-      }
-      html += `<blockquote><p>${inlineFormat(quoteContent.trim())}</p></blockquote>`;
-      continue;
-    }
-
-    // Unordered list
-    if (/^[-*+]\s/.test(line)) {
-      html += '<ul>';
-      while (i < lines.length && /^[-*+]\s/.test(lines[i])) {
-        const taskMatch = lines[i].match(/^[-*+]\s\[([ x])\]\s(.+)/);
-        if (taskMatch) {
-          html += `<li data-checked="${taskMatch[1] === 'x'}">${inlineFormat(taskMatch[2])}</li>`;
-        } else {
-          html += `<li>${inlineFormat(lines[i].replace(/^[-*+]\s/, ''))}</li>`;
-        }
-        i++;
-      }
-      html += '</ul>';
-      continue;
-    }
-
-    // Ordered list
-    if (/^\d+\.\s/.test(line)) {
-      html += '<ol>';
-      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
-        html += `<li>${inlineFormat(lines[i].replace(/^\d+\.\s/, ''))}</li>`;
-        i++;
-      }
-      html += '</ol>';
-      continue;
-    }
-
-    // Table
-    if (line.includes('|')) {
-      const tableLines: string[] = [];
-      while (i < lines.length && lines[i].includes('|')) {
-        tableLines.push(lines[i]);
-        i++;
-      }
-      html += parseTable(tableLines);
-      continue;
-    }
-
-    // Paragraph
-    html += `<p>${inlineFormat(line)}</p>`;
-    i++;
-  }
-
-  return html;
-}
-
-function inlineFormat(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/~~(.+?)~~/g, '<s>$1</s>')
-    .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/==(.+?)==/g, '<mark>$1</mark>')
-    .replace(/\^(.+?)\^/g, '<sup>$1</sup>')
-    .replace(/~(.+?)~/g, '<sub>$1</sub>')
-    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>')
-    .replace(/!\[(.+?)\]\((.+?)\)/g, '<img src="$2" alt="$1">');
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function parseTable(lines: string[]): string {
-  if (lines.length < 2) return '';
-  const rows = lines.filter(l => !l.match(/^\|[\s-:|]+\|$/));
-  let html = '<table>';
-  rows.forEach((row, i) => {
-    const cells = row.split('|').filter(c => c.trim() !== '');
-    const tag = i === 0 ? 'th' : 'td';
-    html += '<tr>' + cells.map(c => `<${tag}>${inlineFormat(c.trim())}</${tag}>`).join('') + '</tr>';
-  });
-  html += '</table>';
-  return html;
+  return markedInstance.parse(md) as string;
 }

@@ -90,11 +90,11 @@ QWidget* MenuBarManager::createMenuWidget(QMenuBar* menuBar)
     m_closeButton->setStyleSheet(closeBtnStyle);
     connect(m_closeButton, &QPushButton::clicked, m_mainWindow, &QWidget::close);
 
-    // Layout: [hamburger] [menubar] [pin] [drag area] [−] [□] [×]
-    layout->addWidget(m_hamburgerButton);
+    // Layout: [menubar] [pin] [drag area] [hamburger] [−] [□] [×]
     layout->addWidget(menuBar);
     layout->addWidget(m_pinButton);
     layout->addStretch(1);
+    layout->addWidget(m_hamburgerButton);
     layout->addWidget(m_minimizeButton);
     layout->addWidget(m_maximizeButton);
     layout->addWidget(m_closeButton);

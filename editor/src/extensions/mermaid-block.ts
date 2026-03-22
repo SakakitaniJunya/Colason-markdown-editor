@@ -2,16 +2,45 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import mermaid from 'mermaid';
 
-// Initialize mermaid
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'default',
-  securityLevel: 'loose',
-  fontFamily: 'inherit',
-  flowchart: { htmlLabels: true, curve: 'basis' },
-});
-
 let renderCounter = 0;
+let currentMermaidTheme = '';
+
+/** Detect dark/light from CSS --bg variable and re-initialize mermaid if needed */
+function syncMermaidTheme() {
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  const isDark = isColorDark(bg);
+  const theme = isDark ? 'dark' : 'default';
+  if (theme !== currentMermaidTheme) {
+    currentMermaidTheme = theme;
+    mermaid.initialize({
+      startOnLoad: false,
+      theme,
+      securityLevel: 'loose',
+      fontFamily: 'inherit',
+      flowchart: { htmlLabels: true, curve: 'basis' },
+    });
+  }
+}
+
+function isColorDark(color: string): boolean {
+  // Parse hex color (#rrggbb or #rgb)
+  let r = 0, g = 0, b = 0;
+  if (color.startsWith('#')) {
+    const hex = color.slice(1);
+    if (hex.length === 3) {
+      r = parseInt(hex[0] + hex[0], 16);
+      g = parseInt(hex[1] + hex[1], 16);
+      b = parseInt(hex[2] + hex[2], 16);
+    } else if (hex.length >= 6) {
+      r = parseInt(hex.slice(0, 2), 16);
+      g = parseInt(hex.slice(2, 4), 16);
+      b = parseInt(hex.slice(4, 6), 16);
+    }
+  }
+  // Relative luminance
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance < 0.5;
+}
 
 const mermaidConvertPluginKey = new PluginKey('mermaidConvert');
 
@@ -125,8 +154,9 @@ export const MermaidBlock = Node.create({
         }
         errorArea.textContent = '';
         errorArea.style.display = 'none';
+        syncMermaidTheme();
+        const id = `mermaid-render-${++renderCounter}`;
         try {
-          const id = `mermaid-render-${++renderCounter}`;
           const { svg } = await mermaid.render(id, code);
           preview.innerHTML = svg;
           preview.style.display = '';
@@ -134,8 +164,33 @@ export const MermaidBlock = Node.create({
           preview.innerHTML = '';
           errorArea.textContent = err.message || 'Mermaid syntax error';
           errorArea.style.display = '';
+        } finally {
+          // Mermaid v11 leaves temporary render/error elements in document.body —
+          // remove them to prevent the error overlay from covering the editor.
+          // Only remove elements that are direct children of body (not our preview SVG).
+          document.querySelectorAll(`body > #${CSS.escape(id)}`).forEach(el => el.remove());
         }
       };
+
+      // Zoom support: Ctrl+wheel to zoom, double-click to reset
+      let zoomLevel = 1;
+      preview.style.transformOrigin = 'center top';
+
+      preview.addEventListener('wheel', (e) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        zoomLevel = Math.min(3, Math.max(0.3, zoomLevel + delta));
+        preview.style.transform = zoomLevel === 1 ? '' : `scale(${zoomLevel})`;
+      }, { passive: false });
+
+      preview.addEventListener('dblclick', (e) => {
+        if (codeArea.style.display !== 'none') return;
+        e.stopPropagation();
+        zoomLevel = 1;
+        preview.style.transform = '';
+      });
 
       // Initial render
       renderMermaid(node.attrs.code);

@@ -210,6 +210,17 @@ function executeEditorCommand(editor: Editor, command: string, args: any) {
     case 'toggleBlockquote': chain.toggleBlockquote().run(); break;
     case 'setCodeBlock': chain.toggleCodeBlock(args.language ? { language: args.language } : undefined).run(); break;
     case 'insertTable': chain.insertTable({ rows: args.rows || 3, cols: args.cols || 3, withHeaderRow: true }).run(); break;
+    case 'addRowBefore': chain.addRowBefore().run(); break;
+    case 'addRowAfter': chain.addRowAfter().run(); break;
+    case 'deleteRow': chain.deleteRow().run(); break;
+    case 'addColumnBefore': chain.addColumnBefore().run(); break;
+    case 'addColumnAfter': chain.addColumnAfter().run(); break;
+    case 'deleteColumn': chain.deleteColumn().run(); break;
+    case 'deleteTable': chain.deleteTable().run(); break;
+    case 'mergeCells': chain.mergeCells().run(); break;
+    case 'splitCell': chain.splitCell().run(); break;
+    case 'toggleHeaderRow': chain.toggleHeaderRow().run(); break;
+    case 'toggleHeaderColumn': chain.toggleHeaderColumn().run(); break;
     case 'insertHorizontalRule': chain.setHorizontalRule().run(); break;
     case 'insertImage': chain.setImage({ src: args.src, alt: args.alt || '' }).run(); break;
     case 'toggleHighlight': chain.toggleHighlight().run(); break;

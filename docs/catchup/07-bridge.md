@@ -2,13 +2,33 @@
 
 ## 仕組み
 
-```
-[C++ 側]                    [QWebChannel]               [JS 側]
-                              (Qt 内蔵)
-EditorBridge ─── registerObject("editor") ──→ channel.objects.editor
-OutlineBridge ── registerObject("outline") ──→ channel.objects.outline
-SearchBridge ─── registerObject("search") ──→ channel.objects.search
-ThemeBridge ──── registerObject("theme") ───→ channel.objects.theme
+```mermaid
+graph LR
+    subgraph CPP["C++ 側"]
+        EB["EditorBridge"]
+        OB["OutlineBridge"]
+        SB["SearchBridge"]
+        ThB["ThemeBridge"]
+    end
+
+    subgraph QWC["QWebChannel (Qt 内蔵)"]
+        R1["registerObject('editor')"]
+        R2["registerObject('outline')"]
+        R3["registerObject('search')"]
+        R4["registerObject('theme')"]
+    end
+
+    subgraph JS["JS 側"]
+        J1["channel.objects.editor"]
+        J2["channel.objects.outline"]
+        J3["channel.objects.search"]
+        J4["channel.objects.theme"]
+    end
+
+    EB --> R1 --> J1
+    OB --> R2 --> J2
+    SB --> R3 --> J3
+    ThB --> R4 --> J4
 ```
 
 QWebChannel は Qt 内蔵の仕組みで、C++ のオブジェクト (QObject) を JavaScript にそのまま公開する。
@@ -104,26 +124,25 @@ m_editorView->page()->runJavaScript(js);
 
 ## QWebChannel の初期化フロー
 
-```
-1. C++ (MainWindow::setupWebEngine):
-   QWebChannel* channel = new QWebChannel(this);
-   channel->registerObject("editor", m_editorBridge);
-   channel->registerObject("outline", m_outlineBridge);
-   // ...
-   m_editorView->page()->setWebChannel(channel);
+```mermaid
+sequenceDiagram
+    participant MW as MainWindow (C++)
+    participant WE as QWebEngineView
+    participant JS as index.ts
+    participant BR as bridge.ts
 
-2. C++ (MainWindow::loadEditorPage):
-   m_editorView->setUrl(QUrl::fromLocalFile("editor/dist/index.html"));
-
-3. JS (index.ts):
-   setupGlobalAPI(editor);  // window.colasonAPI を構築
-   await initBridge(editor); // QWebChannel に接続
-
-4. JS (bridge.ts::initBridge):
-   new QWebChannel(window.qt.webChannelTransport, (channel) => {
-     cppBridge = channel.objects;  // editor, outline, search, theme
-     setupCppSignalHandlers(editor);  // C++→JS シグナルをハンドラに接続
-   });
+    MW->>MW: 1. QWebChannel 生成
+    MW->>MW: registerObject("editor", "outline", ...)
+    MW->>WE: setWebChannel(channel)
+    MW->>WE: 2. setUrl("editor/dist/index.html")
+    WE->>JS: 3. ページ読込完了
+    JS->>JS: createEditor(el)
+    JS->>JS: setupGlobalAPI(editor)
+    JS->>BR: 4. initBridge(editor)
+    BR->>BR: new QWebChannel(transport)
+    BR->>BR: cppBridge = channel.objects
+    BR->>BR: setupCppSignalHandlers(editor)
+    BR-->>MW: QWebChannel 接続完了
 ```
 
 ### スタンドアロンモード

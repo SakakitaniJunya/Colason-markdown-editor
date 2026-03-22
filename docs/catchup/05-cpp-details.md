@@ -26,17 +26,16 @@ int main(int argc, char* argv[])
 
 C# でいう `Form` クラスに相当。コンストラクタで全てをセットアップする:
 
-```
-コンストラクタの流れ:
-  1. DocumentManager, PreferencesManager 生成
-  2. setupUI()           → スプリッター + サイドバー + エディタビュー配置
-  3. setupMenuBar()      → MenuBarManager でメニュー構築
-  4. setupFramelessWindow() → Win32 API でフレームレスウィンドウ
-  5. ThemeManager 生成
-  6. setupWebEngine()    → QWebChannel + ブリッジ登録 + エディタページ読込
-  7. setupManagers()     → AutoSave, DraftRecovery 等の Manager 生成
-  8. setupConnections()  → 全ての Signal/Slot 接続
-  9. ウィンドウ位置復元、テーマ適用、ドラフト復旧チェック
+```mermaid
+graph TD
+    A["1. DocumentManager<br/>PreferencesManager 生成"] --> B["2. setupUI()<br/>スプリッター + サイドバー + エディタビュー"]
+    B --> C["3. setupMenuBar()<br/>MenuBarManager でメニュー構築"]
+    C --> D["4. setupFramelessWindow()<br/>Win32 API でフレームレスウィンドウ"]
+    D --> E["5. ThemeManager 生成"]
+    E --> F["6. setupWebEngine()<br/>QWebChannel + ブリッジ登録 + ページ読込"]
+    F --> G["7. setupManagers()<br/>AutoSave, DraftRecovery 等"]
+    G --> H["8. setupConnections()<br/>全ての Signal/Slot 接続"]
+    H --> I["9. ウィンドウ位置復元<br/>テーマ適用 / ドラフト復旧チェック"]
 ```
 
 ### 主要メソッド
@@ -163,6 +162,39 @@ Qt の `QFile` + `QTextStream` で UTF-8 読み書きする。
 ## Bridge クラス
 
 **C++ と TypeScript の橋渡し。** 全て `QObject` を継承し、QWebChannel で JS に公開される。
+
+```mermaid
+graph LR
+    subgraph CPP["C++ 側"]
+        MW["MainWindow"]
+        DM["DocumentManager"]
+        SC["SidebarContainer"]
+    end
+
+    subgraph Bridges["QWebChannel"]
+        EB["EditorBridge"]
+        OB["OutlineBridge"]
+        SB["SearchBridge"]
+        ThB["ThemeBridge"]
+    end
+
+    subgraph JS["TypeScript 側"]
+        API["colasonAPI"]
+        TT["TipTap Editor"]
+    end
+
+    MW <--> EB
+    DM <--> EB
+    SC <--> OB
+    MW <--> SB
+    MW <--> ThB
+
+    EB <-->|"content / commands"| API
+    OB <-->|"headings"| API
+    SB <-->|"find / replace"| API
+    ThB -->|"CSS injection"| API
+    API <--> TT
+```
 
 ### EditorBridge (メインの通信チャネル)
 

@@ -18,6 +18,8 @@ public:
     void setTheme(const QString& themeName);
     void loadCustomTheme(const QString& cssFilePath);
     void detectSystemTheme();
+    QString detectSystemThemeName() const;
+    bool isDarkTheme(const QString& themeName) const;
 
 signals:
     void themeChanged(const QString& themeName, const QString& css, const QString& qss);

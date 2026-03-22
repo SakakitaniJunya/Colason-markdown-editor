@@ -14,6 +14,7 @@ public:
 private:
     QIcon m_fileIcon;
     QIcon m_textFileIcon;
+    QIcon m_markdownIcon;
     QIcon m_folderIcon;
     QIcon m_folderOpenIcon;
 };

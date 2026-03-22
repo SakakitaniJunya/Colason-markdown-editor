@@ -7,6 +7,7 @@ FileIconProvider::FileIconProvider()
 {
     m_fileIcon = QIcon(":/icons/file.svg");
     m_textFileIcon = QIcon(":/icons/file-text.svg");
+    m_markdownIcon = QIcon(":/icons/file-markdown.svg");
     m_folderIcon = QIcon(":/icons/folder.svg");
     m_folderOpenIcon = QIcon(":/icons/folder-open.svg");
 }
@@ -30,7 +31,10 @@ QIcon FileIconProvider::icon(const QFileInfo& info) const
     }
 
     QString suffix = info.suffix().toLower();
-    if (suffix == "md" || suffix == "markdown" || suffix == "txt"
+    if (suffix == "md" || suffix == "markdown") {
+        return m_markdownIcon;
+    }
+    if (suffix == "txt"
         || suffix == "json" || suffix == "yaml" || suffix == "yml"
         || suffix == "toml" || suffix == "xml" || suffix == "html"
         || suffix == "css" || suffix == "js" || suffix == "ts"
