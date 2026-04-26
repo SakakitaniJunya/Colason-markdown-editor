@@ -99,18 +99,63 @@ cd editor && npm install && npm run build && cd ..
 "c:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --build build --config Release && ./build/src/Release/colason.exe
 ```
 
-## ビルド & 起動 (macOS / Linux)
+## ビルド & 起動 (macOS ローカル)
+
+**前提: Homebrew がインストール済み**
 
 ```bash
-# エディタ (TypeScript) ビルド
-cd editor && npm install && npm run build && cd ..
+# 1. 依存をインストール（初回のみ）
+brew install qt ninja node
 
+# 2. エディタ (TypeScript) をビルド
+cd editor
+npm install
+npm run build
+cd ..
+
+# 3. CMake configure
+cmake -S . -B build-macos \
+  -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
+
+# 4. ビルド
+cmake --build build-macos -j4
+
+# 5. 起動（デバッグ用、ローカルテスト）
+./build-macos/src/colason
+
+# または、.app/.dmg を生成（配布用）
+APP_PATH="./build-macos/src/colason.app"
+"$(brew --prefix qt)/bin/macdeployqt" "$APP_PATH" -always-overwrite
+
+# シンボル削除（軽量化）
+find "$APP_PATH" -name "*.dSYM" -exec rm -rf {} + 2>/dev/null || true
+
+# DMG 作成（アップロード用）
+hdiutil create \
+  -volname "Colason" \
+  -srcfolder "$(dirname $APP_PATH)" \
+  -ov -format UDZIPPIG \
+  "Colason-macOS.dmg"
+```
+
+### サイズ最適化のコツ
+
+- `macdeployqt` の `-always-overwrite` で不完全なリンク警告を無視
+- `find ... -name "*.dSYM" -delete` でデバッグシンボルを削除
+- `strip` で更にバイナリを最適化: `strip -r "$APP_PATH/Contents/MacOS/colason"`
+- DMG は `UDZIPPIG` 形式で自動圧縮
+
+## ビルド & 起動 (Linux)
+
+```bash
 # Configure
-cmake --preset macos-debug   # Linux は linux-debug
+cmake --preset linux-debug
 
 # Build
-cmake --build --preset macos-debug
+cmake --build --preset linux-debug
 
 # Run
-./build/macos-debug/src/colason
+./build/linux-debug/src/colason
 ```

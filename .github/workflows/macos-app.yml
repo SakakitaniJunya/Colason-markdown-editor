@@ -52,17 +52,17 @@ jobs:
             exit 1
           fi
 
-          # Deploy and strip debug symbols
-          "$(brew --prefix qt)/bin/macdeployqt" "$APP_PATH" -always-overwrite
+          # Deploy (ignore rpath warnings)
+          "$(brew --prefix qt)/bin/macdeployqt" "$APP_PATH" -always-overwrite 2>&1 | grep -v "ERROR: Cannot resolve rpath" || true
+          
+          # Strip debug symbols
           find "$APP_PATH" -name "*.dSYM" -exec rm -rf {} + 2>/dev/null || true
-          find "$APP_PATH" -name "*_debug.dylib" -delete
+          find "$APP_PATH" -name "*_debug.dylib" -delete 2>/dev/null || true
+          strip -r "$APP_PATH/Contents/MacOS/colason" 2>/dev/null || true
           
           # Remove unnecessary Qt plugins
-          find "$APP_PATH/Contents/PlugIns" -type d \( -name "imageformats" -o -name "bearer" -o -name "tls" \) 2>/dev/null | while read dir; do
-            if [[ -d "$dir" ]]; then
-              find "$dir" -type f ! -name "*Jpeg*" ! -name "*Png*" ! -name "*Gif*" -delete 2>/dev/null || true
-            fi
-          done
+          find "$APP_PATH/Contents/PlugIns" -type f \( -name "*VirtualKeyboard*" -o -name "*Bearer*" \) -delete 2>/dev/null || true
+          find "$APP_PATH/Contents/PlugIns/imageformats" -type f ! -name "*Jpeg*" ! -name "*Png*" ! -name "*Gif*" -delete 2>/dev/null || true
 
           APP_DIR=$(dirname "$APP_PATH")
           APP_NAME=$(basename "$APP_PATH")
