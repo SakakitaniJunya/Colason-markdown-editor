@@ -1,0 +1,86 @@
+name: Build macOS App
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-macos-app:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: editor/package-lock.json
+
+      - name: Install editor dependencies
+        working-directory: editor
+        run: npm ci
+
+      - name: Build editor assets
+        working-directory: editor
+        run: npm run build
+
+      - name: Install Qt and build tools
+        run: |
+          brew update
+          brew install qt ninja
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build-macos \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
+
+      - name: Build
+        run: cmake --build build-macos -j3
+
+      - name: Bundle .app/.zip/.dmg
+        run: |
+          APP_PATH=$(find build-macos -type d -name "colason.app" | head -n 1)
+          if [[ -z "$APP_PATH" ]]; then
+            echo "colason.app was not found"
+            exit 1
+          fi
+
+          "$(brew --prefix qt)/bin/macdeployqt" "$APP_PATH"
+
+          APP_DIR=$(dirname "$APP_PATH")
+          APP_NAME=$(basename "$APP_PATH")
+          mkdir -p build-macos/artifacts
+
+          cd "$APP_DIR"
+          zip -r "Colason-macOS-app.zip" "$APP_NAME"
+
+          STAGE_DIR="Colason-dmg-stage"
+          rm -rf "$STAGE_DIR"
+          mkdir -p "$STAGE_DIR"
+          cp -R "$APP_NAME" "$STAGE_DIR/"
+
+          hdiutil create \
+            -volname "Colason" \
+            -srcfolder "$STAGE_DIR" \
+            -ov \
+            -format UDZO \
+            "Colason-macOS-app.dmg"
+
+          mv "Colason-macOS-app.zip" "$GITHUB_WORKSPACE/build-macos/artifacts/"
+          mv "Colason-macOS-app.dmg" "$GITHUB_WORKSPACE/build-macos/artifacts/"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Colason-macOS-app
+          path: |
+            build-macos/artifacts/Colason-macOS-app.zip
+            build-macos/artifacts/Colason-macOS-app.dmg
+          if-no-files-found: error

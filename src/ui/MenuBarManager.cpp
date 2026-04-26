@@ -57,7 +57,8 @@ QWidget* MenuBarManager::createMenuWidget(QMenuBar* menuBar)
     m_pinButton->setToolTip(tr("Pin menu bar"));
     connect(m_pinButton, &QPushButton::clicked, this, &MenuBarManager::togglePin);
 
-    // Window control buttons (Segoe MDL2 Assets icons)
+    // Window control buttons
+#ifdef Q_OS_WIN
     const QString winBtnStyle =
         "QPushButton { border: none; background: transparent;"
         "  font-family: 'Segoe MDL2 Assets'; font-size: 10px; }"
@@ -66,14 +67,28 @@ QWidget* MenuBarManager::createMenuWidget(QMenuBar* menuBar)
         "QPushButton { border: none; background: transparent;"
         "  font-family: 'Segoe MDL2 Assets'; font-size: 10px; }"
         "QPushButton:hover { background: #e81123; color: white; }";
+    const QString minLabel = QString(QChar(0xE921)); // ChromeMinimize
+    const QString maxLabel = QString(QChar(0xE922)); // ChromeMaximize
+    const QString closeLabel = QString(QChar(0xE8BB)); // ChromeClose
+#else
+    const QString winBtnStyle =
+        "QPushButton { border: none; background: transparent; font-size: 14px; }"
+        "QPushButton:hover { background: rgba(128,128,128,0.25); }";
+    const QString closeBtnStyle =
+        "QPushButton { border: none; background: transparent; font-size: 14px; }"
+        "QPushButton:hover { background: #e81123; color: white; }";
+    const QString minLabel = QString::fromUtf8("−");
+    const QString maxLabel = QString::fromUtf8("□");
+    const QString closeLabel = QString::fromUtf8("×");
+#endif
 
-    m_minimizeButton = new QPushButton(QString(QChar(0xE921)), container);  // ChromeMinimize
+    m_minimizeButton = new QPushButton(minLabel, container);
     m_minimizeButton->setFixedSize(46, 32);
     m_minimizeButton->setFlat(true);
     m_minimizeButton->setStyleSheet(winBtnStyle);
     connect(m_minimizeButton, &QPushButton::clicked, m_mainWindow, &QWidget::showMinimized);
 
-    m_maximizeButton = new QPushButton(QString(QChar(0xE922)), container);  // ChromeMaximize
+    m_maximizeButton = new QPushButton(maxLabel, container);
     m_maximizeButton->setFixedSize(46, 32);
     m_maximizeButton->setFlat(true);
     m_maximizeButton->setStyleSheet(winBtnStyle);
@@ -84,7 +99,7 @@ QWidget* MenuBarManager::createMenuWidget(QMenuBar* menuBar)
             m_mainWindow->showMaximized();
     });
 
-    m_closeButton = new QPushButton(QString(QChar(0xE8BB)), container);  // ChromeClose
+    m_closeButton = new QPushButton(closeLabel, container);
     m_closeButton->setFixedSize(46, 32);
     m_closeButton->setFlat(true);
     m_closeButton->setStyleSheet(closeBtnStyle);
@@ -211,7 +226,7 @@ void MenuBarManager::setupFileMenu(QMenuBar* menuBar)
     menu->addSeparator();
 
     menu->addAction(tr("E&xit"), qApp, &QApplication::quit,
-                    QKeySequence(Qt::ALT | Qt::Key_F4));
+                    QKeySequence::Quit);
 }
 
 void MenuBarManager::setupEditMenu(QMenuBar* menuBar)
@@ -390,10 +405,12 @@ void MenuBarManager::setupViewMenu(QMenuBar* menuBar)
     menu->addAction(tr("&Source Code Mode"), m_mainWindow, &MainWindow::toggleSourceMode,
                     QKeySequence(Qt::CTRL | Qt::Key_Slash));
 
+#ifdef Q_OS_WIN
     auto* autoHideAction = menu->addAction(tr("Auto-&hide Title Bar"));
     autoHideAction->setCheckable(true);
     autoHideAction->setChecked(m_mainWindow->titleBarAutoHide());
     connect(autoHideAction, &QAction::toggled, m_mainWindow, &MainWindow::setTitleBarAutoHide);
+#endif
 
     menu->addSeparator();
 

@@ -2,6 +2,24 @@
     "version": 6,
     "configurePresets": [
         {
+            "name": "linux-debug",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+            }
+        },
+        {
+            "name": "macos-debug",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+            }
+        },
+        {
             "name": "default",
             "generator": "Visual Studio 18 2026",
             "architecture": { "value": "x64" },
@@ -20,6 +38,8 @@
         }
     ],
     "buildPresets": [
+        { "name": "linux-debug", "configurePreset": "linux-debug" },
+        { "name": "macos-debug", "configurePreset": "macos-debug" },
         { "name": "release", "configurePreset": "default", "configuration": "Release" },
         { "name": "debug", "configurePreset": "debug", "configuration": "Debug" }
     ]

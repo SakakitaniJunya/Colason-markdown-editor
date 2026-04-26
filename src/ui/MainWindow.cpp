@@ -71,10 +71,12 @@ MainWindow::MainWindow(QWidget* parent)
     m_titleBarHideTimer = new QTimer(this);
     m_titleBarHideTimer->setSingleShot(true);
     connect(m_titleBarHideTimer, &QTimer::timeout, this, [this]() {
+#ifdef Q_OS_WIN
         if (m_titleBarAutoHide && m_titleBarShown) {
             m_menuWidget->setVisible(false);
             m_titleBarShown = false;
         }
+#endif
     });
     m_themeManager = new ThemeManager(this);
     setupWebEngine();
@@ -94,9 +96,13 @@ MainWindow::MainWindow(QWidget* parent)
     updateTitle();
 
     // Restore title bar auto-hide state
+#ifdef Q_OS_WIN
     if (settings.value("window/titleBarAutoHide", false).toBool()) {
         setTitleBarAutoHide(true);
     }
+#else
+    settings.setValue("window/titleBarAutoHide", false);
+#endif
 
     // Apply saved theme or auto-detect
     applyPreferences();
@@ -406,12 +412,14 @@ void MainWindow::setupConnections()
             });
 
     // OS theme change detection
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this,
             [this](Qt::ColorScheme scheme) {
                 if (m_prefs->autoDetectTheme()) {
                     m_themeManager->setTheme(scheme == Qt::ColorScheme::Dark ? "dark" : "light");
                 }
             });
+#endif
 }
 
 void MainWindow::newDocument()
@@ -612,6 +620,20 @@ void MainWindow::changeTheme(const QString& themeName)
 
 void MainWindow::setTitleBarAutoHide(bool enabled)
 {
+#ifndef Q_OS_WIN
+    Q_UNUSED(enabled);
+    m_titleBarAutoHide = false;
+    QSettings settings;
+    settings.setValue("window/titleBarAutoHide", false);
+    if (m_titleBarHideTimer) {
+        m_titleBarHideTimer->stop();
+    }
+    if (m_menuWidget) {
+        m_menuWidget->setVisible(true);
+    }
+    m_titleBarShown = true;
+    return;
+#else
     m_titleBarAutoHide = enabled;
     QSettings settings;
     settings.setValue("window/titleBarAutoHide", enabled);
@@ -623,6 +645,7 @@ void MainWindow::setTitleBarAutoHide(bool enabled)
     } else {
         m_titleBarHideTimer->start(1500);
     }
+#endif
 }
 
 void MainWindow::setEditorMarkdown(const QString& markdown)

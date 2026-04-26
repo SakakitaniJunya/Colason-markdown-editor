@@ -14,6 +14,10 @@ add_executable(colason # WIN32 temporarily disabled for debugging
     ${COLASON_RESOURCES}
 )
 
+if(APPLE)
+    set_target_properties(colason PROPERTIES MACOSX_BUNDLE TRUE)
+endif()
+
 target_include_directories(colason PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )

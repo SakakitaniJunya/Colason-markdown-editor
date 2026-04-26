@@ -5,6 +5,7 @@
 #include <QTextStream>
 #include <QStyleHints>
 #include <QGuiApplication>
+#include <QPalette>
 
 ThemeManager::ThemeManager(QObject* parent)
     : QObject(parent)
@@ -564,8 +565,14 @@ void ThemeManager::detectSystemTheme()
 
 QString ThemeManager::detectSystemThemeName() const
 {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     auto colorScheme = QGuiApplication::styleHints()->colorScheme();
     return (colorScheme == Qt::ColorScheme::Dark) ? "dark" : "light";
+#else
+    // Fallback for Qt versions without QStyleHints::colorScheme.
+    const auto windowColor = QGuiApplication::palette().color(QPalette::Window);
+    return (windowColor.lightness() < 128) ? "dark" : "light";
+#endif
 }
 
 bool ThemeManager::isDarkTheme(const QString& themeName) const
