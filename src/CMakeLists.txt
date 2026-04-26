@@ -16,6 +16,12 @@ add_executable(colason # WIN32 temporarily disabled for debugging
 
 if(APPLE)
     set_target_properties(colason PROPERTIES MACOSX_BUNDLE TRUE)
+    
+    # macOS Release optimization for smaller binary
+    if(CMAKE_BUILD_TYPE MATCHES Release)
+        target_compile_options(colason PRIVATE -Os -flto)
+        target_link_options(colason PRIVATE -flto)
+    endif()
 endif()
 
 target_include_directories(colason PRIVATE

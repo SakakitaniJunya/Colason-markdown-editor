@@ -44,47 +44,82 @@ jobs:
       - name: Build
         run: cmake --build build-macos -j3
 
-      - name: Bundle .app/.zip/.dmg
+      - name: Clean unnecessary frameworks before deploy
         run: |
           APP_PATH=$(find build-macos -type d -name "colason.app" | head -n 1)
           if [[ -z "$APP_PATH" ]]; then
             echo "colason.app was not found"
             exit 1
           fi
-
-          # Deploy (ignore rpath warnings)
-          "$(brew --prefix qt)/bin/macdeployqt" "$APP_PATH" -always-overwrite 2>&1 | grep -v "ERROR: Cannot resolve rpath" || true
           
-          # Strip debug symbols
+          # Remove frameworks that cause issues and aren't essential
+          rm -rf "$APP_PATH/Contents/Frameworks/QtVirtualKeyboard.framework" 2>/dev/null || true
+
+      - name: Deploy Qt dependencies
+        run: |
+          APP_PATH=$(find build-macos -type d -name "colason.app" | head -n 1)
+          set +e  # Continue on macdeployqt warnings
+          "$(brew --prefix qt)/bin/macdeployqt" "$APP_PATH" -always-overwrite 2>&1 | tee macdeployqt.log
+          set -e
+          echo "macdeployqt completed (warnings ignored)"
+
+      - name: Fix library links and remove unnecessary files
+        run: |
+          APP_PATH=$(find build-macos -type d -name "colason.app" | head -n 1)
+          
+          # Remove all code signatures from frameworks (they'll be re-created or ignored)
+          find "$APP_PATH/Contents/Frameworks" -name "*.dylib" -o -name "*.framework" | while read lib; do
+            codesign --remove-signature "$lib" 2>/dev/null || true
+          done
+          
+          # Strip debug symbols aggressively
           find "$APP_PATH" -name "*.dSYM" -exec rm -rf {} + 2>/dev/null || true
-          find "$APP_PATH" -name "*_debug.dylib" -delete 2>/dev/null || true
-          strip -r "$APP_PATH/Contents/MacOS/colason" 2>/dev/null || true
+          find "$APP_PATH" -type f -name "*.dylib" -exec strip -x {} + 2>/dev/null || true
+          strip -x "$APP_PATH/Contents/MacOS/colason" 2>/dev/null || true
           
-          # Remove unnecessary Qt plugins
-          find "$APP_PATH/Contents/PlugIns" -type f \( -name "*VirtualKeyboard*" -o -name "*Bearer*" \) -delete 2>/dev/null || true
+          # Delete unnecessary plugins
+          rm -rf "$APP_PATH/Contents/PlugIns/bearer" 2>/dev/null || true
+          rm -rf "$APP_PATH/Contents/PlugIns/tls" 2>/dev/null || true
           find "$APP_PATH/Contents/PlugIns/imageformats" -type f ! -name "*Jpeg*" ! -name "*Png*" ! -name "*Gif*" -delete 2>/dev/null || true
+          
+          # Delete unnecessary resources
+          find "$APP_PATH/Contents/Resources" -name "*.qm" -delete 2>/dev/null || true
 
+      - name: Create distribution packages
+        run: |
+          APP_PATH=$(find build-macos -type d -name "colason.app" | head -n 1)
           APP_DIR=$(dirname "$APP_PATH")
           APP_NAME=$(basename "$APP_PATH")
           mkdir -p build-macos/artifacts
 
           cd "$APP_DIR"
-          zip -r -9 "Colason-macOS-app.zip" "$APP_NAME"
-
+          
+          # ZIP: maximum compression
+          echo "Creating ZIP..."
+          zip -r -9 "Colason-macOS-app.zip" "$APP_NAME" -q
+          ls -lh "Colason-macOS-app.zip"
+          
+          # DMG: with maximum compression
+          echo "Creating DMG..."
           STAGE_DIR="Colason-dmg-stage"
           rm -rf "$STAGE_DIR"
           mkdir -p "$STAGE_DIR"
           cp -R "$APP_NAME" "$STAGE_DIR/"
-
+          
           hdiutil create \
             -volname "Colason" \
             -srcfolder "$STAGE_DIR" \
             -ov \
             -format UDZIPPIG \
-            "Colason-macOS-app.dmg"
+            "Colason-macOS-app.dmg" \
+            -quiet
+          
+          ls -lh "Colason-macOS-app.dmg"
 
           mv "Colason-macOS-app.zip" "$GITHUB_WORKSPACE/build-macos/artifacts/"
           mv "Colason-macOS-app.dmg" "$GITHUB_WORKSPACE/build-macos/artifacts/"
+          
+          echo "✓ Both packages created successfully"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
