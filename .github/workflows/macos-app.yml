@@ -87,7 +87,14 @@ jobs:
 
       - name: Create distribution packages
         run: |
+          set -euo pipefail
+
           APP_PATH=$(find build-macos -type d -name "colason.app" | head -n 1)
+          if [[ -z "$APP_PATH" ]]; then
+            echo "colason.app was not found"
+            exit 1
+          fi
+
           APP_DIR=$(dirname "$APP_PATH")
           APP_NAME=$(basename "$APP_PATH")
           mkdir -p build-macos/artifacts
@@ -102,22 +109,36 @@ jobs:
           # DMG: with maximum compression
           echo "Creating DMG..."
           STAGE_DIR="Colason-dmg-stage"
+          TEMP_DMG="Colason-macOS-app-temp.dmg"
+          FINAL_DMG_BASE="Colason-macOS-app"
           rm -rf "$STAGE_DIR"
+          rm -f "$TEMP_DMG" "$FINAL_DMG_BASE.dmg"
           mkdir -p "$STAGE_DIR"
           cp -R "$APP_NAME" "$STAGE_DIR/"
-          
+
+          ln -s /Applications "$STAGE_DIR/Applications"
+
           hdiutil create \
             -volname "Colason" \
             -srcfolder "$STAGE_DIR" \
             -ov \
-            -format UDZIPPIG \
-            "Colason-macOS-app.dmg" \
-            -quiet
-          
-          ls -lh "Colason-macOS-app.dmg"
+            -fs HFS+ \
+            -format UDRW \
+            "$TEMP_DMG"
+
+          hdiutil convert \
+            "$TEMP_DMG" \
+            -ov \
+            -format UDZO \
+            -imagekey zlib-level=9 \
+            -o "$FINAL_DMG_BASE"
+
+          hdiutil verify "$FINAL_DMG_BASE.dmg"
+
+          ls -lh "$FINAL_DMG_BASE.dmg"
 
           mv "Colason-macOS-app.zip" "$GITHUB_WORKSPACE/build-macos/artifacts/"
-          mv "Colason-macOS-app.dmg" "$GITHUB_WORKSPACE/build-macos/artifacts/"
+          mv "$FINAL_DMG_BASE.dmg" "$GITHUB_WORKSPACE/build-macos/artifacts/"
           
           echo "✓ Both packages created successfully"
 
