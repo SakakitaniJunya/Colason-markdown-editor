@@ -52,14 +52,24 @@ jobs:
             exit 1
           fi
 
-          "$(brew --prefix qt)/bin/macdeployqt" "$APP_PATH"
+          # Deploy and strip debug symbols
+          "$(brew --prefix qt)/bin/macdeployqt" "$APP_PATH" -always-overwrite
+          find "$APP_PATH" -name "*.dSYM" -exec rm -rf {} + 2>/dev/null || true
+          find "$APP_PATH" -name "*_debug.dylib" -delete
+          
+          # Remove unnecessary Qt plugins
+          find "$APP_PATH/Contents/PlugIns" -type d \( -name "imageformats" -o -name "bearer" -o -name "tls" \) 2>/dev/null | while read dir; do
+            if [[ -d "$dir" ]]; then
+              find "$dir" -type f ! -name "*Jpeg*" ! -name "*Png*" ! -name "*Gif*" -delete 2>/dev/null || true
+            fi
+          done
 
           APP_DIR=$(dirname "$APP_PATH")
           APP_NAME=$(basename "$APP_PATH")
           mkdir -p build-macos/artifacts
 
           cd "$APP_DIR"
-          zip -r "Colason-macOS-app.zip" "$APP_NAME"
+          zip -r -9 "Colason-macOS-app.zip" "$APP_NAME"
 
           STAGE_DIR="Colason-dmg-stage"
           rm -rf "$STAGE_DIR"
@@ -70,7 +80,7 @@ jobs:
             -volname "Colason" \
             -srcfolder "$STAGE_DIR" \
             -ov \
-            -format UDZO \
+            -format UDZIPPIG \
             "Colason-macOS-app.dmg"
 
           mv "Colason-macOS-app.zip" "$GITHUB_WORKSPACE/build-macos/artifacts/"
