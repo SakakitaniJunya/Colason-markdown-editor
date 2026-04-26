@@ -1,0 +1,50 @@
+{
+  "name": "Colason (Qt6 + Claude Code)",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "4gb",
+    "storage": "32gb"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "twxs.cmake",
+        "vadimcn.vscode-lldb",
+        "github.copilot",
+        "anthropic.claude-code",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint"
+      ],
+      "settings": {
+        "cmake.configureSettings": {
+          "CMAKE_BUILD_TYPE": "Debug"
+        },
+        "cmake.generator": "Ninja",
+        "C_Cpp.intelliSenseEngine": "default",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "QT_QPA_PLATFORM": "offscreen",
+    "CMAKE_GENERATOR": "Ninja"
+  },
+  "forwardPorts": [3000, 5173],
+  "portsAttributes": {
+    "5173": { "label": "Vite (editor/)", "onAutoForward": "notify" },
+    "3000": { "label": "Dev server", "onAutoForward": "notify" }
+  }
+}
