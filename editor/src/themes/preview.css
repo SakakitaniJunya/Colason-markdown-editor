@@ -1,0 +1,291 @@
+/* ============================================================
+ * Colason — View Mode (Edit / Split / Preview) styles
+ * ============================================================ */
+
+#colason-layout {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  min-height: 100vh;
+  align-items: stretch;
+}
+
+#colason-editor-pane {
+  flex: 1 1 50%;
+  min-width: 0;
+  overflow: auto;
+}
+
+#colason-preview-pane {
+  flex: 1 1 50%;
+  min-width: 0;
+  overflow: auto;
+  border-left: 1px solid var(--border, #e1e4e8);
+  background: var(--bg, #ffffff);
+  padding: 20px 30px;
+  max-width: none;
+}
+
+/* Mode: Edit only — hide preview, give editor full width */
+#colason-layout[data-view-mode="edit"] #colason-preview-pane {
+  display: none;
+}
+#colason-layout[data-view-mode="edit"] #colason-editor-pane {
+  flex: 1 1 100%;
+}
+
+/* Mode: Split — both panes visible */
+#colason-layout[data-view-mode="split"] #colason-editor-pane,
+#colason-layout[data-view-mode="split"] #colason-preview-pane {
+  display: block;
+}
+
+/* Mode: Preview only — hide editor */
+#colason-layout[data-view-mode="preview"] #colason-editor-pane {
+  display: none;
+}
+#colason-layout[data-view-mode="preview"] #colason-preview-pane {
+  flex: 1 1 100%;
+  border-left: none;
+}
+
+/* ===== Toolbar ============================================== */
+
+#colason-view-toolbar {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 10000;
+  display: inline-flex;
+  gap: 0;
+  padding: 2px;
+  background: var(--surface, #f6f8fa);
+  border: 1px solid var(--border, #e1e4e8);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  font-family: inherit;
+}
+
+.colason-view-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-muted, #586069);
+  cursor: pointer;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.colason-view-btn:hover {
+  background: var(--surface-alt, #f8f9fa);
+  color: var(--fg, #333333);
+}
+
+.colason-view-btn.is-active {
+  background: var(--bg, #ffffff);
+  color: var(--fg, #333333);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.colason-view-btn:focus-visible {
+  outline: 2px solid var(--link, #4183c4);
+  outline-offset: 1px;
+}
+
+/* ===== Preview content (CommonMark rendering) =============== */
+
+#colason-preview-pane > * {
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#colason-preview-pane h1,
+#colason-preview-pane h2,
+#colason-preview-pane h3,
+#colason-preview-pane h4,
+#colason-preview-pane h5,
+#colason-preview-pane h6 {
+  color: var(--heading, inherit);
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 1.4em;
+  margin-bottom: 0.5em;
+}
+
+#colason-preview-pane h1 {
+  font-size: 2em;
+  border-bottom: 1px solid var(--heading-border, #eee);
+  padding-bottom: 0.3em;
+}
+#colason-preview-pane h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--heading-border, #eee);
+  padding-bottom: 0.3em;
+}
+#colason-preview-pane h3 { font-size: 1.25em; }
+#colason-preview-pane h4 { font-size: 1em; }
+#colason-preview-pane h5 { font-size: 0.875em; }
+#colason-preview-pane h6 { font-size: 0.85em; color: var(--fg-subtle, #6a737d); }
+
+#colason-preview-pane p { margin: 0.5em 0; }
+
+#colason-preview-pane a { color: var(--link, #4183c4); text-decoration: none; }
+#colason-preview-pane a:hover { text-decoration: underline; }
+
+#colason-preview-pane strong { font-weight: 600; }
+#colason-preview-pane em { font-style: italic; }
+#colason-preview-pane del { text-decoration: line-through; color: var(--strike-fg, #999); }
+
+#colason-preview-pane code {
+  background: var(--code-bg, #f6f8fa);
+  border: 1px solid var(--code-border, #e1e4e8);
+  border-radius: 3px;
+  padding: 0.15em 0.4em;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.875em;
+  color: var(--code-fg, #e83e8c);
+}
+
+#colason-preview-pane pre,
+#colason-preview-pane pre.hljs-pre {
+  background: var(--pre-bg, #f6f8fa);
+  border: 1px solid var(--pre-border, #e1e4e8);
+  border-radius: 6px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+#colason-preview-pane pre code,
+#colason-preview-pane pre.hljs-pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--pre-fg, inherit);
+  font-size: 0.875em;
+  line-height: 1.5;
+}
+
+#colason-preview-pane blockquote {
+  border-left: 4px solid var(--bq-border, #dfe2e5);
+  padding: 0.25em 1em;
+  color: var(--bq-fg, #6a737d);
+  margin: 1em 0;
+}
+
+#colason-preview-pane ul,
+#colason-preview-pane ol {
+  padding-left: 2em;
+  margin: 0.5em 0;
+}
+
+#colason-preview-pane li { margin: 0.25em 0; }
+#colason-preview-pane li > p { margin: 0; }
+
+#colason-preview-pane ul[data-type="taskList"] { list-style: none; padding-left: 0.5em; }
+#colason-preview-pane ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+#colason-preview-pane ul[data-type="taskList"] li[data-checked="true"] { color: var(--task-done-fg, #999); text-decoration: line-through; }
+
+#colason-preview-pane hr {
+  border: none;
+  border-top: 2px solid var(--hr-border, #e1e4e8);
+  margin: 2em 0;
+}
+
+#colason-preview-pane table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+#colason-preview-pane th,
+#colason-preview-pane td {
+  border: 1px solid var(--td-border, #dfe2e5);
+  padding: 8px 13px;
+  text-align: left;
+}
+#colason-preview-pane th { background: var(--th-bg, #f6f8fa); font-weight: 600; }
+#colason-preview-pane tr:nth-child(2n) { background: var(--tr-alt-bg, #f8f9fa); }
+
+#colason-preview-pane img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1em auto;
+  border-radius: 4px;
+}
+
+#colason-preview-pane mark {
+  background-color: var(--mark-bg, #fff3a3);
+  color: var(--mark-fg, inherit);
+  padding: 0.1em 0.2em;
+  border-radius: 2px;
+}
+
+#colason-preview-pane .preview-error {
+  color: var(--mermaid-err-fg, #cc0000);
+  background: var(--mermaid-err-bg, #fff5f5);
+  border: 1px solid var(--mermaid-err-border, #ffcccc);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+/* ===== highlight.js theme (code block syntax highlight) =====
+ * Inherits the existing variables; falls back to GitHub-light tokens.
+ */
+
+#colason-preview-pane .hljs { color: var(--hljs-fg, #24292e); }
+#colason-preview-pane .hljs-keyword,
+#colason-preview-pane .hljs-selector-tag,
+#colason-preview-pane .hljs-literal,
+#colason-preview-pane .hljs-meta-keyword { color: var(--hljs-keyword, #d73a49); }
+#colason-preview-pane .hljs-string,
+#colason-preview-pane .hljs-regexp,
+#colason-preview-pane .hljs-link { color: var(--hljs-string, #032f62); }
+#colason-preview-pane .hljs-comment,
+#colason-preview-pane .hljs-quote { color: var(--hljs-comment, #6a737d); font-style: italic; }
+#colason-preview-pane .hljs-number,
+#colason-preview-pane .hljs-meta { color: var(--hljs-number, #005cc5); }
+#colason-preview-pane .hljs-function,
+#colason-preview-pane .hljs-title,
+#colason-preview-pane .hljs-class .hljs-title { color: var(--hljs-function, #6f42c1); }
+#colason-preview-pane .hljs-built_in,
+#colason-preview-pane .hljs-builtin-name,
+#colason-preview-pane .hljs-type { color: var(--hljs-builtin, #005cc5); }
+#colason-preview-pane .hljs-variable,
+#colason-preview-pane .hljs-template-variable,
+#colason-preview-pane .hljs-attr { color: #e36209; }
+#colason-preview-pane .hljs-tag,
+#colason-preview-pane .hljs-name,
+#colason-preview-pane .hljs-attribute { color: #22863a; }
+#colason-preview-pane .hljs-emphasis { font-style: italic; }
+#colason-preview-pane .hljs-strong { font-weight: 700; }
+
+/* ===== Layout shim — ensure #editor inside the wrapper still
+ *      keeps the existing centered max-width when in edit-only.
+ *      In split/preview the wrapper handles overflow & we let
+ *      #editor flow naturally inside it.
+ * ============================================================ */
+
+#colason-layout[data-view-mode="split"] #colason-editor-pane #editor,
+#colason-layout[data-view-mode="preview"] #colason-editor-pane #editor {
+  max-width: none;
+}
+
+@media (max-width: 720px) {
+  /* On very narrow screens, force vertical stack in split mode. */
+  #colason-layout[data-view-mode="split"] {
+    flex-direction: column;
+  }
+  #colason-layout[data-view-mode="split"] #colason-preview-pane {
+    border-left: none;
+    border-top: 1px solid var(--border, #e1e4e8);
+  }
+}

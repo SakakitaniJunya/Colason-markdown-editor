@@ -1,5 +1,7 @@
+import './themes/preview.css';
 import { createEditor } from './editor';
 import { initBridge, setupGlobalAPI } from './bridge';
+import { initPreviewMode } from './preview-mode';
 
 async function main() {
   const editorElement = document.getElementById('editor');
@@ -11,6 +13,7 @@ async function main() {
   const editor = createEditor(editorElement);
   setupGlobalAPI(editor);
   await initBridge(editor);
+  initPreviewMode(editor);
 
   console.log('[Colason] Editor initialized');
 }
