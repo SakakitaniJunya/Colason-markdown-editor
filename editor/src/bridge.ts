@@ -83,6 +83,10 @@ export function setupGlobalAPI(editor: Editor) {
   // Setup scroll-based active heading tracking
   setupHeadingObserver(editor);
 
+  // Bridge hook used by file-manager.ts so the file manager's dirty state
+  // also propagates to the C++ shell when running inside Qt.
+  (window as any).colasonBridgeNotifyDirty = (dirty: boolean) => notifyDocumentDirty(dirty);
+
   (window as any).colasonAPI = {
     setContent(content: string) {
       // Exit source mode if active, so the user returns to WYSIWYG
