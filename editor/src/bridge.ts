@@ -2,7 +2,7 @@ import type { Editor } from '@tiptap/core';
 import type { EditorView } from '@codemirror/view';
 import { createSourceEditor, toggleSourceMode, isInSourceMode, setSourceKeybinding, simpleMarkdownToHtml, htmlToSimpleMarkdown } from './source-mode';
 import type { KeybindingMode } from './keybindings';
-import { QWebChannel } from './qwebchannel';
+import { QWebChannel } from './common/infra/qwebchannel';
 
 let cppBridge: any = null;
 let cmEditor: EditorView | null = null;
