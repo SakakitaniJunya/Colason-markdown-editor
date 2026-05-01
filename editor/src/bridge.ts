@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/core';
 import type { EditorView } from '@codemirror/view';
 import { createSourceEditor, toggleSourceMode, isInSourceMode, setSourceKeybinding, simpleMarkdownToHtml, htmlToSimpleMarkdown } from './source-mode';
+import { renderMarkdownForExport } from './preview-mode';
 import type { KeybindingMode } from './keybindings';
 import { QWebChannel } from './qwebchannel';
 
@@ -113,6 +114,27 @@ export function setupGlobalAPI(editor: Editor) {
 
     getMarkdown(): string {
       return htmlToSimpleMarkdown(editor.getHTML());
+    },
+
+    /**
+     * Returns a self-contained HTML string suitable for export (HTML/PDF).
+     * Mermaid code blocks are rendered to inline SVG so the exported
+     * artefact includes diagrams without requiring a JS runtime. This is
+     * async because Mermaid is dynamically imported.
+     *
+     * NOTE (2026-05-01): The C++ ExportManager currently calls
+     * `colasonAPI.getContent()`. To pick up rendered diagrams it should
+     * invoke `colasonAPI.getExportHtml()` instead and await the JS
+     * Promise via `runJavaScript`. Tracked as a follow-up.
+     */
+    async getExportHtml(): Promise<string> {
+      const md = htmlToSimpleMarkdown(editor.getHTML());
+      try {
+        return await renderMarkdownForExport(md);
+      } catch (err) {
+        console.warn('[Colason] getExportHtml failed', err);
+        return editor.getHTML();
+      }
     },
 
     executeCommand(command: string, argsJson: string) {

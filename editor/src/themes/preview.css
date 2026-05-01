@@ -237,6 +237,41 @@
   border-radius: 4px;
 }
 
+/* ===== Mermaid diagrams (preview) =========================== */
+
+#colason-preview-pane .mermaid-rendered {
+  margin: 1em 0;
+  text-align: center;
+}
+#colason-preview-pane .mermaid-rendered[data-mermaid-rendered="1"] {
+  background: var(--mermaid-bg, transparent);
+  padding: 8px 4px;
+  border-radius: 6px;
+}
+#colason-preview-pane .mermaid-rendered[data-mermaid-rendered="1"] svg {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+}
+#colason-preview-pane .mermaid-rendered[data-mermaid-pending="1"] .mermaid-source-fallback {
+  /* Show the raw source while mermaid is loading so the user sees
+   * something instead of a flash of empty content. */
+  opacity: 0.85;
+}
+#colason-preview-pane .mermaid-rendered[data-mermaid-rendered="1"] .mermaid-source-fallback {
+  display: none;
+}
+#colason-preview-pane .mermaid-error-caption {
+  color: var(--mermaid-err-fg, #cc0000);
+  background: var(--mermaid-err-bg, #fff5f5);
+  border: 1px solid var(--mermaid-err-border, #ffcccc);
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  font-size: 0.85em;
+  text-align: left;
+}
+
 /* ===== highlight.js theme (code block syntax highlight) =====
  * Inherits the existing variables; falls back to GitHub-light tokens.
  */

@@ -13,6 +13,12 @@
  * `$inline$` / `$$display$$` are rendered with KaTeX via
  * `marked-katex-extension` (errors fall back to a readable inline message).
  *
+ * ` ```mermaid ` code fences are rendered as SVG diagrams via Mermaid.
+ * The mermaid library (~600KB) is dynamically imported on first use to
+ * keep the initial bundle lean; rendering happens asynchronously after the
+ * preview HTML is committed, and parse errors fall back to the original
+ * code block (highlight.js styled) so the document stays readable.
+ *
  * The preview is debounced to ~60ms for sub-100ms responsiveness even on
  * large documents.
  */
@@ -39,6 +45,23 @@ let editorRef: Editor | null = null;
 let renderTimer: number | null = null;
 let scrollSyncing = false;
 
+// === Mermaid pipeline =====================================================
+// We collect mermaid code per render pass and replace placeholders after
+// the (sanitized) HTML is committed. Tracking via a render-pass token lets
+// us cancel stale async renders if the user keeps typing.
+
+interface MermaidJob {
+  id: string;       // DOM element id of the placeholder
+  code: string;     // raw diagram source
+}
+
+let mermaidPass = 0;
+let mermaidJobs: MermaidJob[] = [];
+let mermaidIdSeq = 0;
+let mermaidLib: typeof import('mermaid').default | null = null;
+let mermaidLoading: Promise<typeof import('mermaid').default> | null = null;
+let mermaidCurrentTheme = '';
+
 // === Markdown renderer (CommonMark + GFM, syntax-highlighted) ==============
 
 const previewMarked = new Marked({
@@ -49,6 +72,19 @@ const previewMarked = new Marked({
     code(token) {
       const lang = (token.lang || '').trim().split(/\s+/)[0] || '';
       const code = token.text || '';
+
+      // Mermaid: emit a placeholder; the real SVG is filled in asynchronously
+      // by `processMermaidJobs()` after DOMPurify sanitizes the HTML. We keep
+      // the raw source on the placeholder so a render error can fall back to
+      // the original code block.
+      if (lang === 'mermaid') {
+        const id = `colason-mermaid-${++mermaidIdSeq}`;
+        mermaidJobs.push({ id, code });
+        return `<div id="${id}" class="mermaid-rendered" data-mermaid-pending="1">`
+          + `<pre class="hljs-pre mermaid-source-fallback"><code class="hljs language-mermaid">${escapeHtml(code)}</code></pre>`
+          + `</div>\n`;
+      }
+
       let highlighted: string;
       if (lang && hljs.getLanguage(lang)) {
         try {
@@ -243,6 +279,10 @@ function renderPreviewNow() {
     console.warn('[Colason] preview serialize failed', err);
   }
 
+  // Reset mermaid job queue for this pass.
+  mermaidJobs = [];
+  const passToken = ++mermaidPass;
+
   let safeHtml: string;
   try {
     safeHtml = renderMarkdownToSafeHtml(md);
@@ -252,6 +292,12 @@ function renderPreviewNow() {
 
   previewEl.innerHTML = safeHtml;
   tagPreviewHeadings();
+
+  if (mermaidJobs.length > 0) {
+    // Don't await — let the preview paint immediately with the fallback
+    // code blocks; SVGs swap in when ready.
+    void processMermaidJobs(mermaidJobs.slice(), passToken);
+  }
 }
 
 function tagPreviewHeadings() {
@@ -260,6 +306,217 @@ function tagPreviewHeadings() {
   headings.forEach((h, idx) => {
     h.setAttribute('data-heading-index', String(idx));
   });
+}
+
+// === Mermaid rendering =====================================================
+
+/**
+ * Lazy-load mermaid and render every queued diagram for this pass. If the
+ * pass is superseded (user kept typing) we abort to avoid trampling a newer
+ * preview. Errors are kept inline as the fallback code block, so the AC
+ * "error -> show original code" is satisfied without DOM rewrites.
+ */
+async function processMermaidJobs(jobs: MermaidJob[], passToken: number) {
+  let lib: typeof import('mermaid').default;
+  try {
+    lib = await loadMermaid();
+  } catch (err) {
+    console.warn('[Colason] mermaid lazy-load failed', err);
+    return; // Fallback code blocks are already in place.
+  }
+  if (passToken !== mermaidPass || !previewEl) return;
+
+  syncMermaidTheme(lib);
+
+  for (const job of jobs) {
+    if (passToken !== mermaidPass || !previewEl) return;
+    const host = previewEl.querySelector<HTMLElement>(`#${cssEscape(job.id)}`);
+    if (!host) continue;
+
+    // mermaid.parse() throws on syntax errors; do a check first so we don't
+    // even attempt render() on bad input.
+    try {
+      // parse() returns void/true; throws on error.
+      // suppressErrors:true returns false instead of throwing — we want the throw
+      // path to keep the fallback in place uniformly.
+      await lib.parse(job.code);
+    } catch (err) {
+      markMermaidFallback(host, err);
+      continue;
+    }
+
+    const renderId = `colason-mermaid-svg-${job.id}`;
+    try {
+      const { svg, bindFunctions } = await lib.render(renderId, job.code);
+      if (passToken !== mermaidPass) return;
+      // Replace the fallback code block with the SVG. We keep the host element
+      // so heading indices and surrounding CSS aren't disturbed.
+      host.innerHTML = svg;
+      host.removeAttribute('data-mermaid-pending');
+      host.setAttribute('data-mermaid-rendered', '1');
+      if (typeof bindFunctions === 'function') {
+        try { bindFunctions(host); } catch { /* non-fatal */ }
+      }
+    } catch (err) {
+      markMermaidFallback(host, err);
+    } finally {
+      // mermaid v11 leaves temporary nodes on document.body; clean up.
+      const stray = document.getElementById(renderId);
+      if (stray && stray.parentElement === document.body) stray.remove();
+    }
+  }
+}
+
+function markMermaidFallback(host: HTMLElement, err: unknown) {
+  // The fallback `<pre><code>` block was already rendered inside `host` at
+  // marked-time; we just annotate state and surface a small error caption.
+  host.removeAttribute('data-mermaid-pending');
+  host.setAttribute('data-mermaid-error', '1');
+  if (!host.querySelector('.mermaid-error-caption')) {
+    const caption = document.createElement('div');
+    caption.className = 'mermaid-error-caption';
+    caption.textContent = `Mermaid render error: ${String((err as Error)?.message ?? err)}`;
+    host.insertBefore(caption, host.firstChild);
+  }
+}
+
+function loadMermaid(): Promise<typeof import('mermaid').default> {
+  if (mermaidLib) return Promise.resolve(mermaidLib);
+  if (mermaidLoading) return mermaidLoading;
+  mermaidLoading = import('mermaid').then((mod) => {
+    mermaidLib = mod.default;
+    return mermaidLib;
+  });
+  return mermaidLoading;
+}
+
+function syncMermaidTheme(lib: typeof import('mermaid').default) {
+  // Match the editor-side MermaidBlock heuristic: sample the CSS --bg
+  // variable; if it's dark, use the 'dark' theme. The PR #13 theme controller
+  // updates --bg on theme change, so this stays in sync automatically.
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  const theme = isColorDark(bg) ? 'dark' : 'default';
+  if (theme === mermaidCurrentTheme) return;
+  mermaidCurrentTheme = theme;
+  lib.initialize({
+    startOnLoad: false,
+    theme,
+    securityLevel: 'strict', // preview is read-only; lock down click handlers
+    fontFamily: 'inherit',
+    flowchart: { htmlLabels: true, curve: 'basis' },
+  });
+}
+
+function isColorDark(color: string): boolean {
+  if (!color) return false;
+  let r = 0, g = 0, b = 0;
+  const hex = color.startsWith('#') ? color.slice(1) : '';
+  if (hex.length === 3) {
+    r = parseInt(hex[0] + hex[0], 16);
+    g = parseInt(hex[1] + hex[1], 16);
+    b = parseInt(hex[2] + hex[2], 16);
+  } else if (hex.length >= 6) {
+    r = parseInt(hex.slice(0, 2), 16);
+    g = parseInt(hex.slice(2, 4), 16);
+    b = parseInt(hex.slice(4, 6), 16);
+  } else {
+    // rgb(...) form
+    const m = color.match(/rgba?\(([^)]+)\)/i);
+    if (m) {
+      const parts = m[1].split(',').map(s => parseFloat(s.trim()));
+      r = parts[0] || 0;
+      g = parts[1] || 0;
+      b = parts[2] || 0;
+    }
+  }
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance < 0.5;
+}
+
+function cssEscape(s: string): string {
+  // CSS.escape is widely available; fall back to a minimal escape for
+  // older runtimes (Qt WebEngine 5.15 supports CSS.escape).
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(s);
+  }
+  return s.replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+}
+
+/**
+ * Force a re-render of the preview (used when the global theme changes so
+ * mermaid can re-initialize with the new colors). Safe to call from outside.
+ */
+export function refreshPreviewForThemeChange() {
+  // Resetting the cached theme makes the next render recompute it.
+  mermaidCurrentTheme = '';
+  if (currentMode !== 'edit') {
+    renderPreviewNow();
+  }
+}
+
+/**
+ * Render markdown to a self-contained, sanitized HTML string with all
+ * Mermaid diagrams already replaced by inline SVG. Used by the export
+ * pipeline so that exported HTML/PDF includes the rendered diagrams
+ * regardless of the current view mode.
+ *
+ * Returns a Promise because mermaid is loaded lazily and renders async.
+ * Mermaid render errors fall back to a `<pre><code class="language-mermaid">`
+ * block (same fallback as the live preview).
+ */
+export async function renderMarkdownForExport(md: string): Promise<string> {
+  // Use a fresh job queue so a concurrent live-preview render isn't disturbed.
+  const savedJobs = mermaidJobs;
+  const savedPass = mermaidPass;
+  mermaidJobs = [];
+  const myPass = ++mermaidPass;
+
+  let html: string;
+  try {
+    html = renderMarkdownToSafeHtml(md);
+  } catch (err) {
+    mermaidJobs = savedJobs;
+    mermaidPass = savedPass;
+    return `<p class="preview-error">Export render failed: ${escapeHtml(String(err))}</p>`;
+  }
+
+  const jobs = mermaidJobs.slice();
+  mermaidJobs = savedJobs;
+  // Keep mermaidPass moving forward so live-preview cancellation logic is happy.
+
+  if (jobs.length === 0) return html;
+
+  let lib: typeof import('mermaid').default;
+  try {
+    lib = await loadMermaid();
+  } catch {
+    return html; // SVGs missing, but fallback <pre><code> is already in HTML.
+  }
+  syncMermaidTheme(lib);
+
+  // Render each diagram into a detached container so we can swap the
+  // placeholder by id into the HTML string.
+  const tmp = document.createElement('div');
+  tmp.style.position = 'absolute';
+  tmp.style.left = '-99999px';
+  tmp.innerHTML = html;
+  for (const job of jobs) {
+    const host = tmp.querySelector<HTMLElement>(`#${cssEscape(job.id)}`);
+    if (!host) continue;
+    try {
+      await lib.parse(job.code);
+      const renderId = `colason-export-mermaid-${myPass}-${job.id}`;
+      const { svg } = await lib.render(renderId, job.code);
+      host.innerHTML = svg;
+      host.removeAttribute('data-mermaid-pending');
+      host.setAttribute('data-mermaid-rendered', '1');
+      const stray = document.getElementById(renderId);
+      if (stray && stray.parentElement === document.body) stray.remove();
+    } catch (err) {
+      markMermaidFallback(host, err);
+    }
+  }
+  return tmp.innerHTML;
 }
 
 // === Keyboard shortcuts ====================================================
