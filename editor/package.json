@@ -43,6 +43,7 @@
     "katex": "^0.16.40",
     "lowlight": "^3.1.0",
     "marked": "^17.0.5",
+    "marked-katex-extension": "^5.1.8",
     "mermaid": "^11.13.0"
   },
   "devDependencies": {

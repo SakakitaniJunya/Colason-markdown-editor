@@ -9,7 +9,9 @@
  * Toolbar buttons + keyboard shortcuts (Ctrl/Cmd+1/2/3) switch modes.
  * Preview rendering uses `marked` for CommonMark + GFM parsing, and the
  * resulting HTML is sanitized with DOMPurify (XSS-safe). Code blocks are
- * syntax-highlighted via highlight.js.
+ * syntax-highlighted via highlight.js. Math expressions delimited by
+ * `$inline$` / `$$display$$` are rendered with KaTeX via
+ * `marked-katex-extension` (errors fall back to a readable inline message).
  *
  * The preview is debounced to ~60ms for sub-100ms responsiveness even on
  * large documents.
@@ -18,7 +20,9 @@
 import type { Editor } from '@tiptap/core';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
+import 'katex/dist/katex.css';
 import { Marked } from 'marked';
+import markedKatex from 'marked-katex-extension';
 import { htmlToSimpleMarkdown } from './source-mode';
 
 export type ViewMode = 'edit' | 'split' | 'preview';
@@ -65,6 +69,19 @@ const previewMarked = new Marked({
   },
 });
 
+// Wire KaTeX into marked.
+//   - throwOnError: false  -> KaTeX renders an error span instead of throwing,
+//     so a malformed expression degrades gracefully without breaking the rest
+//     of the preview.
+//   - output: 'html'       -> emits HTML+CSS only (no MathML), which keeps the
+//     DOM smaller for documents with 100+ formulas.
+previewMarked.use(
+  markedKatex({
+    throwOnError: false,
+    output: 'html',
+  }),
+);
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -81,9 +98,12 @@ function escapeAttr(s: string): string {
 function renderMarkdownToSafeHtml(md: string): string {
   const raw = previewMarked.parse(md) as string;
   // DOMPurify keeps the highlight classes; we restrict to a safe subset.
+  // KaTeX emits spans with inline `style` (for spacing) and `aria-hidden`
+  // attributes; both are allowed by DOMPurify's html profile by default,
+  // but we add them explicitly so the policy is self-documenting.
   return DOMPurify.sanitize(raw, {
     USE_PROFILES: { html: true },
-    ADD_ATTR: ['data-heading-index'],
+    ADD_ATTR: ['data-heading-index', 'aria-hidden', 'style'],
     FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
   });
