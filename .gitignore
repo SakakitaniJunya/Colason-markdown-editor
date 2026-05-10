@@ -1,5 +1,8 @@
 build/
+build-*/
 CMakeFiles/
+.DS_Store
+**/.DS_Store
 editor/node_modules/
 editor/dist/
 *.user

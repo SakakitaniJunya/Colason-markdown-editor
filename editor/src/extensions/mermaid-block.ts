@@ -141,8 +141,27 @@ export const MermaidBlock = Node.create({
       const errorArea = document.createElement('div');
       errorArea.classList.add('mermaid-error');
 
+      // Zoom toolbar (always present, fades in on hover or while zoomed)
+      const zoomBar = document.createElement('div');
+      zoomBar.classList.add('mermaid-zoom-controls');
+      zoomBar.contentEditable = 'false';
+      zoomBar.setAttribute('data-no-edit', '');
+      const mkBtn = (label: string, title: string, onClick: (e: MouseEvent) => void) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = label;
+        b.title = title;
+        b.addEventListener('mousedown', (e) => e.preventDefault());
+        b.addEventListener('click', (e) => { e.stopPropagation(); onClick(e); });
+        return b;
+      };
+      const zoomLabel = document.createElement('span');
+      zoomLabel.classList.add('mermaid-zoom-label');
+      zoomLabel.textContent = '100%';
+
       container.appendChild(codeArea);
       container.appendChild(preview);
+      preview.appendChild(zoomBar);
       container.appendChild(errorArea);
 
       let debounceTimer: ReturnType<typeof setTimeout>;
@@ -172,25 +191,104 @@ export const MermaidBlock = Node.create({
         }
       };
 
-      // Zoom support: Ctrl+wheel to zoom, double-click to reset
+      // Zoom + pan support. The diagram is wrapped in an <svg>; we transform the
+      // preview's content via CSS transform. Pan = translate, zoom = scale.
+      // Overlay buttons + Esc keep the user from getting stuck when zoomed in.
       let zoomLevel = 1;
-      preview.style.transformOrigin = 'center top';
+      let panX = 0;
+      let panY = 0;
+      preview.style.transformOrigin = '0 0';
+
+      const applyTransform = () => {
+        if (zoomLevel === 1 && panX === 0 && panY === 0) {
+          preview.style.transform = '';
+          preview.classList.remove('is-zoomed');
+        } else {
+          preview.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+          preview.classList.add('is-zoomed');
+        }
+        zoomLabel.textContent = `${Math.round(zoomLevel * 100)}%`;
+      };
+
+      const applyZoom = (next: number) => {
+        const prev = zoomLevel;
+        zoomLevel = Math.min(4, Math.max(0.25, Math.round(next * 100) / 100));
+        // When zooming back to 1×, also reset pan so content snaps to origin.
+        if (zoomLevel === 1) { panX = 0; panY = 0; }
+        // Keep the visual center stable across zoom changes (zoom around center).
+        const rect = preview.getBoundingClientRect();
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
+        panX = cx - ((cx - panX) * (zoomLevel / prev));
+        panY = cy - ((cy - panY) * (zoomLevel / prev));
+        if (zoomLevel === 1) { panX = 0; panY = 0; }
+        applyTransform();
+      };
+
+      const fitToWidth = () => {
+        const svg = preview.querySelector('svg') as SVGSVGElement | null;
+        if (!svg) { applyZoom(1); return; }
+        const containerWidth = preview.clientWidth - 32;
+        const svgWidth = svg.getBoundingClientRect().width / zoomLevel;
+        if (svgWidth > 0) {
+          panX = 0; panY = 0;
+          applyZoom(containerWidth / svgWidth);
+        }
+      };
+
+      // Build toolbar buttons (children appended to existing zoomBar)
+      zoomBar.appendChild(mkBtn('−', 'Zoom out', () => applyZoom(zoomLevel - 0.1)));
+      zoomBar.appendChild(zoomLabel);
+      zoomBar.appendChild(mkBtn('+', 'Zoom in', () => applyZoom(zoomLevel + 0.1)));
+      zoomBar.appendChild(mkBtn('⤢', 'Fit width', () => fitToWidth()));
+      zoomBar.appendChild(mkBtn('1×', 'Reset zoom (Esc)', () => applyZoom(1)));
 
       preview.addEventListener('wheel', (e) => {
-        if (!e.ctrlKey) return;
+        if (!(e.ctrlKey || e.metaKey)) return;
         e.preventDefault();
         e.stopPropagation();
         const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        zoomLevel = Math.min(3, Math.max(0.3, zoomLevel + delta));
-        preview.style.transform = zoomLevel === 1 ? '' : `scale(${zoomLevel})`;
+        applyZoom(zoomLevel + delta);
       }, { passive: false });
 
-      preview.addEventListener('dblclick', (e) => {
-        if (codeArea.style.display !== 'none') return;
+      // Drag to pan while zoomed in (mouse) — never hijacks normal click.
+      let dragState: { startX: number; startY: number; baseX: number; baseY: number } | null = null;
+      preview.addEventListener('mousedown', (e) => {
+        if (zoomLevel === 1) return;          // no pan when not zoomed
+        if (e.button !== 0) return;           // primary button only
+        const target = e.target as HTMLElement;
+        if (target.closest('.mermaid-zoom-controls')) return;  // toolbar clicks
+        dragState = { startX: e.clientX, startY: e.clientY, baseX: panX, baseY: panY };
+        e.preventDefault();
         e.stopPropagation();
-        zoomLevel = 1;
-        preview.style.transform = '';
       });
+      const onMove = (e: MouseEvent) => {
+        if (!dragState) return;
+        panX = dragState.baseX + (e.clientX - dragState.startX);
+        panY = dragState.baseY + (e.clientY - dragState.startY);
+        applyTransform();
+      };
+      const onUp = () => { dragState = null; };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      (preview as any)._mermaidPanHandlers = { onMove, onUp };
+
+      preview.addEventListener('dblclick', (e) => {
+        if (zoomLevel === 1) return;
+        e.stopPropagation();
+        e.preventDefault();
+        panX = 0; panY = 0;
+        applyZoom(1);
+      });
+
+      // ESC key resets zoom whenever the preview is in view
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' && zoomLevel !== 1 && preview.matches(':hover')) {
+          applyZoom(1);
+        }
+      };
+      document.addEventListener('keydown', onKey);
+      (preview as any)._mermaidEscHandler = onKey;
 
       // Initial render
       renderMermaid(node.attrs.code);
@@ -244,6 +342,13 @@ export const MermaidBlock = Node.create({
         },
         destroy() {
           clearTimeout(debounceTimer);
+          const handler = (preview as any)._mermaidEscHandler;
+          if (handler) document.removeEventListener('keydown', handler);
+          const pan = (preview as any)._mermaidPanHandlers;
+          if (pan) {
+            document.removeEventListener('mousemove', pan.onMove);
+            document.removeEventListener('mouseup', pan.onUp);
+          }
         },
         stopEvent(event: Event) {
           return container.contains(event.target as globalThis.Node);

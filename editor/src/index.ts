@@ -9,6 +9,13 @@ async function main() {
   // first paint already uses the correct palette (no light->dark flash).
   initThemeController();
 
+  // Restore wide mode preference
+  try {
+    if (localStorage.getItem('colason.wideMode') === '1') {
+      document.body.classList.add('wide-mode');
+    }
+  } catch {}
+
   const editorElement = document.getElementById('editor');
   if (!editorElement) {
     console.error('[Colason] Editor element not found');

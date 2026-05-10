@@ -25,6 +25,7 @@ import {
   notifyDocumentDirty,
   notifyHeadingsChanged,
   notifyCursorPosition,
+  notifyOpenLink,
 } from './bridge';
 import { simpleMarkdownToHtml } from './source-mode';
 import { setupTableContextMenu } from './table-context-menu';
@@ -119,9 +120,36 @@ export function createEditor(element: HTMLElement): Editor {
   });
 
   setupTableContextMenu(editor);
+  setupLinkClickHandler(editor);
 
   lastContent = editor.getHTML();
   return editor;
+}
+
+// Cmd/Ctrl + click on links opens externally via the C++ bridge
+// (TipTap's Link extension is configured with openOnClick: false to
+// keep the cursor inside the link in edit-mode, but users still need
+// a way to actually visit the URL.)
+function setupLinkClickHandler(editor: Editor) {
+  editor.view.dom.addEventListener('click', (e: MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    const anchor = target.closest('a[href]') as HTMLAnchorElement | null;
+    if (!anchor) return;
+
+    const href = anchor.getAttribute('href');
+    if (!href) return;
+
+    // Cmd (Mac) / Ctrl (Win/Linux) → open externally.
+    // Plain click on an http(s) link also opens — Typora-style behavior.
+    const isExternal = /^(https?:|mailto:|file:)/i.test(href);
+    const wantOpen = e.metaKey || e.ctrlKey || isExternal;
+    if (!wantOpen) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    notifyOpenLink(href);
+  }, true);
 }
 
 function looksLikeMarkdown(text: string): boolean {

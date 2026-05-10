@@ -37,6 +37,7 @@ signals:
     void documentDirty(bool dirty);
     void cursorPositionChanged(int line, int col);
     void contentReceived(const QString& html);
+    void openLinkRequested(const QString& url);
 
 public slots:
     void setDirty(bool dirty);
