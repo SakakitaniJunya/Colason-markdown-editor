@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "MenuBarManager.h"
+#include "EditorPane.h"
 #include "QuickOpenDialog.h"
 #include "sidebar/SidebarContainer.h"
 #include "bridge/EditorBridge.h"
@@ -35,8 +36,13 @@
 #include <QStatusBar>
 #include <QMenuBar>
 #include <QPushButton>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QScreen>
 
 #ifdef HAS_WEBENGINE
+#include <QWebEngineView>
+#include <QWebChannel>
 #include <QWebEngineSettings>
 #include <QWebEnginePage>
 #include <QWebEngineScript>
@@ -56,13 +62,35 @@
 #endif
 #endif
 
+namespace {
+
+// Helper: JSON-quote a string for JS injection
+QString jsQuote(const QString& s) {
+    QJsonArray arr;
+    arr.append(s);
+    QString json = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+    return json.mid(1, json.size() - 2);
+}
+
+} // namespace
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    m_docManager = new DocumentManager(this);
     m_prefs = new PreferencesManager(this);
+    m_themeManager = new ThemeManager(this);
 
     setupUI();
+
+    // Initial pane
+#ifdef HAS_WEBENGINE
+    auto* initial = createPane();
+    m_paneSplitter->addWidget(initial);
+    m_panes.append(initial);
+    loadEditorIntoPane(initial);
+    setActivePane(initial);
+#endif
+
     setupMenuBar();
     setupFramelessWindow();
     statusBar()->hide();
@@ -78,8 +106,7 @@ MainWindow::MainWindow(QWidget* parent)
         }
 #endif
     });
-    m_themeManager = new ThemeManager(this);
-    setupWebEngine();
+
     setupManagers();
     setupConnections();
 
@@ -87,7 +114,6 @@ MainWindow::MainWindow(QWidget* parent)
     QSettings settings;
     restoreGeometry(settings.value("window/geometry").toByteArray());
     restoreState(settings.value("window/state").toByteArray());
-
     if (size().isEmpty()) {
         resize(1280, 800);
     }
@@ -95,7 +121,6 @@ MainWindow::MainWindow(QWidget* parent)
     setAcceptDrops(true);
     updateTitle();
 
-    // Restore title bar auto-hide state
 #ifdef Q_OS_WIN
     if (settings.value("window/titleBarAutoHide", false).toBool()) {
         setTitleBarAutoHide(true);
@@ -104,7 +129,6 @@ MainWindow::MainWindow(QWidget* parent)
     settings.setValue("window/titleBarAutoHide", false);
 #endif
 
-    // Apply saved theme or auto-detect
     applyPreferences();
 
     // Restore last opened folder
@@ -119,24 +143,28 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow() = default;
 
+// ----------------------------------------------------------------------
+// UI / Pane scaffolding
+// ----------------------------------------------------------------------
+
 void MainWindow::setupUI()
 {
     m_splitter = new QSplitter(Qt::Horizontal, this);
     setCentralWidget(m_splitter);
 
-    // Sidebar
     m_sidebar = new SidebarContainer(this);
     m_splitter->addWidget(m_sidebar);
 
-    // Editor area
 #ifdef HAS_WEBENGINE
-    m_editorView = new QWebEngineView(this);
-    m_splitter->addWidget(m_editorView);
+    m_paneSplitter = new QSplitter(Qt::Horizontal, this);
+    m_paneSplitter->setHandleWidth(2);
+    m_paneSplitter->setChildrenCollapsible(false);
+    m_splitter->addWidget(m_paneSplitter);
 #else
     m_editorPlaceholder = new QWidget(this);
     auto* label = new QLabel(
-        QString::fromUtf8("QWebEngine \343\201\214\345\210\251\347\224\250\343\201\247\343\201\215\343\201\276\343\201\233\343\202\223\343\200\202\n"  // "QWebEngine が利用できません。\n"
-                          "qtwebengine \343\202\222\343\203\223\343\203\253\343\203\211\343\201\227\343\201\246\343\202\250\343\203\207\343\202\243\343\202\277\343\202\222\346\234\211\345\212\271\343\201\253\343\201\227\343\201\246\343\201\217\343\201\240\343\201\225\343\201\204\343\200\202"),  // "qtwebengine をビルドしてエディタを有効にしてください。"
+        QString::fromUtf8("QWebEngine \343\201\214\345\210\251\347\224\250\343\201\247\343\201\215\343\201\276\343\201\233\343\202\223\343\200\202\n"
+                          "qtwebengine \343\202\222\343\203\223\343\203\253\343\203\211\343\201\227\343\201\246\343\202\250\343\203\207\343\202\243\343\202\277\343\202\222\346\234\211\345\212\271\343\201\253\343\201\227\343\201\246\343\201\217\343\201\240\343\201\225\343\201\204\343\200\202"),
         m_editorPlaceholder);
     label->setAlignment(Qt::AlignCenter);
     label->setStyleSheet("font-size: 14px;");
@@ -145,113 +173,114 @@ void MainWindow::setupUI()
     m_splitter->addWidget(m_editorPlaceholder);
 #endif
 
-    // Splitter sizes: sidebar 240px, editor rest
     m_splitter->setSizes({240, 1000});
     m_splitter->setStretchFactor(0, 0);
     m_splitter->setStretchFactor(1, 1);
-    m_splitter->setCollapsible(0, true);   // Sidebar collapsible
-    m_splitter->setCollapsible(1, false);  // Editor not collapsible
-    m_splitter->setHandleWidth(1);         // 1px border per design
+    m_splitter->setCollapsible(0, true);
+    m_splitter->setCollapsible(1, false);
+    m_splitter->setHandleWidth(1);
 
-    // Minimum sizes
     m_sidebar->setMinimumWidth(160);
     m_sidebar->setMaximumWidth(400);
 
-    // Panel switching shortcuts: 1=Files, 2=Outline, 3=Documents
     auto* shortcut1 = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_1), this);
     connect(shortcut1, &QShortcut::activated, this, [this]() {
         if (!m_sidebarVisible) toggleSidebar();
-        m_sidebar->switchToPanel(0);  // Files
+        m_sidebar->switchToPanel(0);
     });
-
     auto* shortcut2 = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_2), this);
     connect(shortcut2, &QShortcut::activated, this, [this]() {
         if (!m_sidebarVisible) toggleSidebar();
-        m_sidebar->switchToPanel(1);  // Outline
+        m_sidebar->switchToPanel(1);
     });
-
     auto* shortcut3 = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_3), this);
     connect(shortcut3, &QShortcut::activated, this, [this]() {
         if (!m_sidebarVisible) toggleSidebar();
-        m_sidebar->switchToPanel(2);  // Documents
+        m_sidebar->switchToPanel(2);
     });
 
-    // QuickOpen shortcut
     auto* quickOpenShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this);
     connect(quickOpenShortcut, &QShortcut::activated, this, &MainWindow::quickOpen);
+
+    // Cycle to next pane (Ctrl+`)
+    auto* cyclePaneShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this);
+    connect(cyclePaneShortcut, &QShortcut::activated, this, &MainWindow::focusNextPane);
 }
 
 void MainWindow::setupMenuBar()
 {
     m_menuBarManager = new MenuBarManager(this);
-
-    // Create a standalone QMenuBar (not the default one from QMainWindow)
     auto* menuBar = new QMenuBar(nullptr);
-
-    // Wrap it in a container widget with hamburger + pin + window control buttons
     m_menuWidget = m_menuBarManager->createMenuWidget(menuBar);
-
-    // Replace QMainWindow's default menu bar area with our custom widget
     setMenuWidget(m_menuWidget);
 }
 
 void MainWindow::setupFramelessWindow()
 {
 #ifdef Q_OS_WIN
-    // Force native window handle creation, then extend DWM frame for shadow
     HWND hwnd = reinterpret_cast<HWND>(winId());
     MARGINS margins = {0, 0, 0, 1};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
-
-    // Notify Windows that the non-client area calculation has changed
     SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                  SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 #endif
 }
 
-void MainWindow::setupWebEngine()
+EditorPane* MainWindow::createPane()
 {
 #ifdef HAS_WEBENGINE
-    // Setup QWebChannel with all bridges
-    m_channel = new QWebChannel(this);
-    m_editorBridge = new EditorBridge(this);
-    m_outlineBridge = new OutlineBridge(this);
-    m_searchBridge = new SearchBridge(this);
-    m_themeBridge = new ThemeBridge(this);
+    auto* pane = new EditorPane();
+    wirePane(pane);
+    return pane;
+#else
+    return nullptr;
+#endif
+}
 
-    m_channel->registerObject("editor", m_editorBridge);
-    m_channel->registerObject("outline", m_outlineBridge);
-    m_channel->registerObject("search", m_searchBridge);
-    m_channel->registerObject("theme", m_themeBridge);
+void MainWindow::wirePane(EditorPane* pane)
+{
+#ifdef HAS_WEBENGINE
+    auto* p = pane;
 
-    m_editorView->page()->setWebChannel(m_channel);
+    connect(p, &EditorPane::focusRequested, this, &MainWindow::setActivePane);
 
-    // qwebchannel.js is bundled in the TypeScript editor (editor/src/qwebchannel.ts)
-    // so no C++ injection is needed
+    // contentChanged: store in this pane's DocumentManager + refresh title if active
+    connect(p->editorBridge(), &EditorBridge::contentChanged, this, [this, p](const QString& html) {
+        p->docManager()->setContent(html);
+        if (p == m_activePane) updateTitle();
+    });
 
-    // WebEngine settings
-    auto* settings = m_editorView->page()->settings();
-    settings->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, true);
-    settings->setAttribute(QWebEngineSettings::JavascriptEnabled, true);
-    settings->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
+    connect(p->editorBridge(), &EditorBridge::documentDirty, this, [this, p](bool dirty) {
+        p->docManager()->setDirty(dirty);
+        if (p == m_activePane) updateTitle();
+    });
 
-    // Determine initial theme and inject CSS BEFORE page loads to prevent FOUC
+    // Cmd/Ctrl-click on a link → open externally
+    connect(p->editorBridge(), &EditorBridge::openLinkRequested, this, [](const QString& url) {
+        QUrl u(url);
+        if (!u.isValid() || u.isRelative()) return;
+        const QString scheme = u.scheme().toLower();
+        if (scheme == "http" || scheme == "https" || scheme == "mailto" || scheme == "file") {
+            QDesktopServices::openUrl(u);
+        }
+    });
+
+    // Outline updates: only if firing pane is active
+    connect(p->outlineBridge(), &OutlineBridge::headingsChanged, this, [this, p](const QString& json) {
+        if (p == m_activePane) m_sidebar->updateOutline(json);
+    });
+    connect(p->outlineBridge(), &OutlineBridge::activeHeadingChanged, this, [this, p](const QString& id) {
+        if (p == m_activePane) m_sidebar->setActiveHeading(id);
+    });
+
+    // Pre-inject theme CSS at DocumentReady so the very first paint is themed
     QString themeName = m_prefs->autoDetectTheme()
         ? m_themeManager->detectSystemThemeName()
         : m_prefs->theme();
     QString themeCss = m_themeManager->themeCSS(themeName);
     bool isDark = m_themeManager->isDarkTheme(themeName);
-
-    // Set page background color to match theme (prevents white flash)
-    m_editorView->page()->setBackgroundColor(isDark ? QColor("#1e1e1e") : QColor("#ffffff"));
-
-    // Inject theme CSS at DocumentReady — DOM exists, runs before page display
+    p->page()->setBackgroundColor(isDark ? QColor("#1e1e1e") : QColor("#ffffff"));
     if (!themeCss.isEmpty()) {
-        QJsonArray arr;
-        arr.append(themeCss);
-        QString jsonCss = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
-        QString jsonStr = jsonCss.mid(1, jsonCss.size() - 2);
-
         QString jsSource = QString(
             "(function(){"
             "var t=document.head||document.documentElement;"
@@ -261,7 +290,7 @@ void MainWindow::setupWebEngine()
             "el.textContent=%1;"
             "t.appendChild(el);"
             "})()"
-        ).arg(jsonStr);
+        ).arg(jsQuote(themeCss));
 
         QWebEngineScript script;
         script.setName("colason-theme-init");
@@ -269,186 +298,289 @@ void MainWindow::setupWebEngine()
         script.setInjectionPoint(QWebEngineScript::DocumentReady);
         script.setWorldId(QWebEngineScript::MainWorld);
         script.setRunsOnSubFrames(false);
-        m_editorView->page()->scripts().insert(script);
+        p->page()->scripts().insert(script);
     }
 
-    loadEditorPage();
+    // Re-apply theme + wide mode + keybinding when the editor page finishes loading.
+    connect(p->page(), &QWebEnginePage::loadFinished, this, [this, p](bool ok) {
+        if (!ok) return;
+        QString themeName = m_themeManager->currentThemeName();
+        QString css = m_themeManager->themeCSS(themeName);
+        if (!css.isEmpty()) {
+            QString js = QString(
+                "(function(){"
+                "if(!document.head) return;"
+                "var el=document.getElementById('colason-theme');"
+                "if(!el){el=document.createElement('style');el.id='colason-theme';}"
+                "el.textContent=%1;"
+                "document.head.appendChild(el);"
+                "})()"
+            ).arg(jsQuote(css));
+            p->page()->runJavaScript(js);
+        }
+        p->page()->runJavaScript(
+            QString("colasonAPI.setWideMode(%1)").arg(m_wideMode ? "true" : "false"));
+        QString keybinding = m_prefs->keybinding();
+        if (keybinding != "default") {
+            QString js = QString("colasonAPI.setKeybinding && colasonAPI.setKeybinding(%1)").arg(jsQuote(keybinding));
+            p->page()->runJavaScript(js);
+        }
+        if (m_zoomPercent != 100) {
+            p->page()->runJavaScript(QString("colasonAPI.setZoom(%1)").arg(m_zoomPercent));
+        }
+    });
+#else
+    Q_UNUSED(pane);
 #endif
 }
+
+void MainWindow::loadEditorIntoPane(EditorPane* pane)
+{
+#ifdef HAS_WEBENGINE
+    QString editorDistDir = QString::fromUtf8(EDITOR_DIST_DIR);
+    QString indexPath = editorDistDir + "/index.html";
+    pane->loadEditorPage(indexPath, "qrc:/editor/index.html");
+#else
+    Q_UNUSED(pane);
+#endif
+}
+
+void MainWindow::setActivePane(EditorPane* pane)
+{
+    if (!pane) return;
+    if (pane == m_activePane) return;
+    if (m_activePane) m_activePane->setActive(false);
+    m_activePane = pane;
+    pane->setActive(true);
+    // Refresh title + active file for sidebar
+    updateTitle();
+    if (m_sidebar) m_sidebar->setCurrentFile(pane->docManager()->currentFilePath());
+}
+
+void MainWindow::splitActive(Qt::Orientation orientation)
+{
+#ifdef HAS_WEBENGINE
+    if (!m_activePane) return;
+    auto* current = m_activePane;
+    auto* parentSplitter = qobject_cast<QSplitter*>(current->parentWidget());
+    if (!parentSplitter) return;
+
+    int idx = parentSplitter->indexOf(current);
+
+    auto* newPane = createPane();
+    if (!newPane) return;
+    m_panes.append(newPane);
+    loadEditorIntoPane(newPane);
+
+    if (parentSplitter->orientation() == orientation) {
+        parentSplitter->insertWidget(idx + 1, newPane);
+        // Equalize sizes
+        QList<int> sizes;
+        const int extent = (orientation == Qt::Horizontal) ? parentSplitter->width() : parentSplitter->height();
+        const int n = parentSplitter->count();
+        const int each = n > 0 ? extent / n : 200;
+        for (int i = 0; i < n; ++i) sizes.append(each);
+        parentSplitter->setSizes(sizes);
+    } else {
+        // Different orientation: nest a new splitter in place of `current`
+        auto* nested = new QSplitter(orientation);
+        nested->setHandleWidth(2);
+        nested->setChildrenCollapsible(false);
+        const int extent = (orientation == Qt::Horizontal) ? current->width() : current->height();
+        // Detach `current` from its parent so we can re-parent it into the nested splitter
+        current->setParent(nullptr);
+        nested->addWidget(current);
+        nested->addWidget(newPane);
+        const int half = extent > 0 ? extent / 2 : 200;
+        nested->setSizes({half, extent - half});
+        parentSplitter->insertWidget(idx, nested);
+    }
+
+    setActivePane(newPane);
+#else
+    Q_UNUSED(orientation);
+#endif
+}
+
+void MainWindow::splitRight() { splitActive(Qt::Horizontal); }
+void MainWindow::splitDown()  { splitActive(Qt::Vertical); }
+
+void MainWindow::closeActivePane()
+{
+    if (!m_activePane) return;
+    if (m_panes.size() <= 1) return;  // never close the last pane
+
+    auto* current = m_activePane;
+    auto* parentSplitter = qobject_cast<QSplitter*>(current->parentWidget());
+    if (!parentSplitter) return;
+
+    // Pick a successor before deletion
+    EditorPane* successor = nullptr;
+    for (auto* p : m_panes) {
+        if (p != current) { successor = p; break; }
+    }
+
+    m_panes.removeAll(current);
+    m_activePane = nullptr;
+    current->deleteLater();
+
+    // Collapse trivial splitters: if parentSplitter ended up with only 1 child
+    // and parentSplitter itself is nested in another QSplitter, hoist that
+    // remaining child up one level. (Keeps the layout tight, VSCode-style.)
+    if (parentSplitter != m_paneSplitter && parentSplitter->count() == 1) {
+        auto* grandparent = qobject_cast<QSplitter*>(parentSplitter->parentWidget());
+        if (grandparent) {
+            int idx = grandparent->indexOf(parentSplitter);
+            QWidget* survivor = parentSplitter->widget(0);
+            survivor->setParent(nullptr);
+            grandparent->insertWidget(idx, survivor);
+            parentSplitter->deleteLater();
+        }
+    }
+
+    if (successor) setActivePane(successor);
+}
+
+void MainWindow::focusNextPane()
+{
+    if (m_panes.size() <= 1) return;
+    int idx = m_panes.indexOf(m_activePane);
+    EditorPane* next = m_panes.value((idx + 1) % m_panes.size());
+    if (next) {
+        setActivePane(next);
+        next->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+// ----------------------------------------------------------------------
+// Managers / connections
+// ----------------------------------------------------------------------
 
 void MainWindow::setupManagers()
 {
     m_recentFiles = new RecentFilesManager(this);
-    m_autoSaveManager = new AutoSaveManager(m_docManager, this);
-    m_draftManager = new DraftRecoveryManager(m_docManager, this);
+    // AutoSave/Draft are tied to the *initial* pane's DocumentManager.
+    // (Saving any other pane is via Ctrl+S which always uses the active pane.)
+    auto* primaryDoc = m_panes.isEmpty() ? nullptr : m_panes.first()->docManager();
+    m_autoSaveManager = new AutoSaveManager(primaryDoc, this);
+    m_draftManager = new DraftRecoveryManager(primaryDoc, this);
     m_globalSearch = new GlobalSearchManager(this);
     m_imageManager = new ImageManager(this);
     m_exportManager = new ExportManager(this);
-    // m_themeManager is created earlier (before setupWebEngine) for early CSS injection
 
-    // AutoSave settings from preferences
     m_autoSaveManager->setEnabled(m_prefs->autoSaveEnabled());
     m_autoSaveManager->setInterval(m_prefs->autoSaveIntervalMs());
     m_imageManager->setAssetsSubfolder(m_prefs->imageAssetSubfolder());
 }
 
-void MainWindow::loadEditorPage()
-{
-#ifdef HAS_WEBENGINE
-    QString editorDistDir = QString::fromUtf8(EDITOR_DIST_DIR);
-    QString indexPath = editorDistDir + "/index.html";
-
-    if (QFile::exists(indexPath)) {
-        m_editorView->setUrl(QUrl::fromLocalFile(indexPath));
-    } else {
-        m_editorView->setUrl(QUrl("qrc:/editor/index.html"));
-    }
-#endif
-}
-
 void MainWindow::setupConnections()
 {
 #ifdef HAS_WEBENGINE
-    // EditorBridge signals
-    connect(m_editorBridge, &EditorBridge::contentChanged, this, [this](const QString& html) {
-        m_docManager->setContent(html);
-        updateTitle();
-    });
-
-    connect(m_editorBridge, &EditorBridge::wordCountChanged, this,
-            [this](int, int) {
-                // Word count display removed (no status bar)
-            });
-
-    connect(m_editorBridge, &EditorBridge::documentDirty, this, [this](bool dirty) {
-        m_docManager->setDirty(dirty);
-        updateTitle();
-    });
-
-    connect(m_outlineBridge, &OutlineBridge::headingsChanged, this,
-            [this](const QString& json) {
-                m_sidebar->updateOutline(json);
-            });
-
-    // OutlineBridge: active heading sync
-    connect(m_outlineBridge, &OutlineBridge::activeHeadingChanged, this,
-            [this](const QString& id) {
-                m_sidebar->setActiveHeading(id);
-            });
-
-    // AutoSave: request content from editor
+    // AutoSave: route content request to the *primary* pane (matches how the
+    // manager was constructed). Active pane saves go through saveFile() instead.
     connect(m_autoSaveManager, &AutoSaveManager::getContentRequested, this, [this]() {
-        m_editorView->page()->runJavaScript("colasonAPI.getContent()", [this](const QVariant& result) {
+        if (m_panes.isEmpty()) return;
+        m_panes.first()->page()->runJavaScript("colasonAPI.getContent()", [this](const QVariant& result) {
             m_autoSaveManager->onContentReceived(result.toString());
         });
     });
-
     connect(m_autoSaveManager, &AutoSaveManager::autoSaved, this, [this]() {
         statusBar()->showMessage(tr("Auto-saved"), 3000);
         updateTitle();
     });
 
-    // Draft recovery: request content
     connect(m_draftManager, &DraftRecoveryManager::getContentRequested, this, [this]() {
-        m_editorView->page()->runJavaScript("colasonAPI.getContent()", [this](const QVariant& result) {
+        if (m_panes.isEmpty()) return;
+        m_panes.first()->page()->runJavaScript("colasonAPI.getContent()", [this](const QVariant& result) {
             m_draftManager->saveDraft(result.toString());
         });
     });
 
-    // Export signals
     connect(m_exportManager, &ExportManager::exportFinished, this, [this](bool success, const QString& path) {
         if (success) {
             statusBar()->showMessage(tr("Exported to: %1").arg(path), 5000);
         }
     });
-
     connect(m_exportManager, &ExportManager::exportError, this, [this](const QString& error) {
         QMessageBox::warning(this, tr("Export Error"), error);
     });
 
-    // Theme changes
     connect(m_themeManager, &ThemeManager::themeChanged, this, &MainWindow::applyTheme);
 
-    // Preferences changes
     connect(m_prefs, &PreferencesManager::autoSaveChanged, this, [this](bool enabled, int intervalMs) {
         m_autoSaveManager->setEnabled(enabled);
         m_autoSaveManager->setInterval(intervalMs);
     });
-
     connect(m_prefs, &PreferencesManager::keybindingChanged, this, [this](const QString& keybinding) {
-        QString js = QString("colasonAPI.setKeybinding && colasonAPI.setKeybinding('%1')").arg(keybinding);
-        m_editorView->page()->runJavaScript(js);
+        QString js = QString("colasonAPI.setKeybinding && colasonAPI.setKeybinding(%1)").arg(jsQuote(keybinding));
+        for (auto* p : m_panes) p->page()->runJavaScript(js);
     });
-
     connect(m_prefs, &PreferencesManager::themeChanged, this, [this](const QString& theme) {
         m_themeManager->setTheme(theme);
     });
 #endif
 
-    // Sidebar -> Editor (outline click)
-    connect(m_sidebar, &SidebarContainer::headingClicked, this,
-            [this](const QString& id) {
+    connect(m_sidebar, &SidebarContainer::headingClicked, this, [this](const QString& id) {
 #ifdef HAS_WEBENGINE
-                QString js = QString("colasonAPI.scrollToHeading('%1')").arg(id);
-                m_editorView->page()->runJavaScript(js);
+        if (!m_activePane) return;
+        QString js = QString("colasonAPI.scrollToHeading(%1)").arg(jsQuote(id));
+        m_activePane->page()->runJavaScript(js);
 #endif
-            });
+    });
 
-    // Sidebar -> Open folder (from placeholder button)
     connect(m_sidebar, &SidebarContainer::openFolderRequested, this, &MainWindow::openFolder);
 
-    // Sidebar -> Open file
-    connect(m_sidebar, &SidebarContainer::fileSelected, this,
-            [this](const QString& path) {
-                qDebug() << "[fileSelected] path:" << path;
-                bool ok = m_docManager->openDocument(path);
-                qDebug() << "[fileSelected] openDocument:" << ok;
-                m_recentFiles->addFile(path);
-                QString content = m_docManager->currentContent();
-                qDebug() << "[fileSelected] content length:" << content.length();
-                setEditorMarkdown(content);
-                m_sidebar->setCurrentFile(path);
-                updateTitle();
-            });
+    // Sidebar -> Open file in active pane
+    connect(m_sidebar, &SidebarContainer::fileSelected, this, [this](const QString& path) {
+        if (!m_activePane) return;
+        bool ok = m_activePane->docManager()->openDocument(path);
+        if (!ok) return;
+        m_recentFiles->addFile(path);
+        QString content = m_activePane->docManager()->currentContent();
+        setActivePaneMarkdown(content);
+        m_sidebar->setCurrentFile(path);
+        updateTitle();
+    });
 
-    // OS theme change detection
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-    connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this,
-            [this](Qt::ColorScheme scheme) {
-                if (m_prefs->autoDetectTheme()) {
-                    m_themeManager->setTheme(scheme == Qt::ColorScheme::Dark ? "dark" : "light");
-                }
-            });
+    connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme scheme) {
+        if (m_prefs->autoDetectTheme()) {
+            m_themeManager->setTheme(scheme == Qt::ColorScheme::Dark ? "dark" : "light");
+        }
+    });
 #endif
 }
 
+// ----------------------------------------------------------------------
+// File operations (active pane)
+// ----------------------------------------------------------------------
+
 void MainWindow::newDocument()
 {
-    m_docManager->newDocument();
-    setEditorHtml("<p></p>");
+    if (!m_activePane) return;
+    m_activePane->docManager()->newDocument();
+    setActivePaneHtml("<p></p>");
     updateTitle();
 }
 
 void MainWindow::openFile()
 {
+    if (!m_activePane) return;
     QString path = QFileDialog::getOpenFileName(
         this, tr("Open File"), QString(),
         tr("Markdown Files (*.md *.markdown *.txt);;All Files (*)"));
-
     if (path.isEmpty()) return;
 
-    m_docManager->openDocument(path);
+    m_activePane->docManager()->openDocument(path);
     m_recentFiles->addFile(path);
-    setEditorMarkdown(m_docManager->currentContent());
+    setActivePaneMarkdown(m_activePane->docManager()->currentContent());
     m_sidebar->setCurrentFile(path);
     updateTitle();
 }
 
 void MainWindow::openFolder()
 {
-    QString dir = QFileDialog::getExistingDirectory(
-        this, tr("Open Folder"), QString());
-
+    QString dir = QFileDialog::getExistingDirectory(this, tr("Open Folder"), QString());
     if (dir.isEmpty()) return;
     m_recentFiles->addFolder(dir);
     m_sidebar->setRootPath(dir);
@@ -456,43 +588,51 @@ void MainWindow::openFolder()
 
 void MainWindow::saveFile()
 {
-    if (m_docManager->currentFilePath().isEmpty()) {
+    if (!m_activePane) return;
+    auto* dm = m_activePane->docManager();
+    if (dm->currentFilePath().isEmpty()) {
         saveFileAs();
         return;
     }
-
 #ifdef HAS_WEBENGINE
-    m_editorView->page()->runJavaScript("colasonAPI.getMarkdown()", [this](const QVariant& result) {
-        if (result.isValid() && m_docManager->saveDocument(result.toString())) {
+    auto* p = m_activePane;
+    p->page()->runJavaScript("colasonAPI.getMarkdown()", [this, p, dm](const QVariant& result) {
+        if (result.isValid() && dm->saveDocument(result.toString())) {
             m_draftManager->deleteAllDrafts();
         } else {
             statusBar()->showMessage(tr("Failed to save file"), 5000);
         }
-        updateTitle();
+        if (p == m_activePane) updateTitle();
     });
 #endif
 }
 
 void MainWindow::saveFileAs()
 {
+    if (!m_activePane) return;
     QString path = QFileDialog::getSaveFileName(
         this, tr("Save As"), QString(),
         tr("Markdown Files (*.md);;All Files (*)"));
-
     if (path.isEmpty()) return;
 
 #ifdef HAS_WEBENGINE
-    m_editorView->page()->runJavaScript("colasonAPI.getMarkdown()", [this, path](const QVariant& result) {
-        if (result.isValid() && m_docManager->saveDocumentAs(path, result.toString())) {
+    auto* p = m_activePane;
+    auto* dm = p->docManager();
+    p->page()->runJavaScript("colasonAPI.getMarkdown()", [this, p, dm, path](const QVariant& result) {
+        if (result.isValid() && dm->saveDocumentAs(path, result.toString())) {
             m_recentFiles->addFile(path);
             m_draftManager->deleteAllDrafts();
         } else {
             statusBar()->showMessage(tr("Failed to save file"), 5000);
         }
-        updateTitle();
+        if (p == m_activePane) updateTitle();
     });
 #endif
 }
+
+// ----------------------------------------------------------------------
+// View / mode toggles (active pane unless noted)
+// ----------------------------------------------------------------------
 
 void MainWindow::toggleSidebar()
 {
@@ -500,33 +640,45 @@ void MainWindow::toggleSidebar()
     m_sidebar->setVisible(m_sidebarVisible);
 }
 
-void MainWindow::toggleSourceMode()
+#define ACTIVE_JS(call) do { \
+    if (m_activePane) m_activePane->page()->runJavaScript(call); \
+} while (0)
+
+void MainWindow::toggleSourceMode()    { ACTIVE_JS("colasonAPI.toggleSourceMode()"); }
+void MainWindow::toggleFocusMode()     { ACTIVE_JS("colasonAPI.toggleFocusMode()"); }
+void MainWindow::toggleTypewriterMode(){ ACTIVE_JS("colasonAPI.toggleTypewriterMode()"); }
+
+void MainWindow::toggleWideMode()
 {
+    m_wideMode = !m_wideMode;
+    QSettings().setValue("view/wideMode", m_wideMode);
 #ifdef HAS_WEBENGINE
-    m_editorView->page()->runJavaScript("colasonAPI.toggleSourceMode()");
+    QString js = QString("colasonAPI.setWideMode(%1)").arg(m_wideMode ? "true" : "false");
+    for (auto* p : m_panes) p->page()->runJavaScript(js);
 #endif
 }
 
-void MainWindow::toggleFocusMode()
+void MainWindow::openInNewWindow()
 {
-#ifdef HAS_WEBENGINE
-    m_editorView->page()->runJavaScript("colasonAPI.toggleFocusMode()");
-#endif
-}
-
-void MainWindow::toggleTypewriterMode()
-{
-#ifdef HAS_WEBENGINE
-    m_editorView->page()->runJavaScript("colasonAPI.toggleTypewriterMode()");
-#endif
+    auto* w = new MainWindow();
+    w->setAttribute(Qt::WA_DeleteOnClose, true);
+    QRect g = geometry();
+    QScreen* scr = screen();
+    QRect avail = scr ? scr->availableGeometry() : QRect(0, 0, 2560, 1440);
+    int x = qMin(g.right() + 12, avail.right() - g.width());
+    int y = g.top();
+    w->setGeometry(QRect(QPoint(x, y), g.size()));
+    w->show();
+    w->raise();
+    w->activateWindow();
 }
 
 void MainWindow::zoomIn()
 {
     m_zoomPercent = qMin(m_zoomPercent + 10, 200);
 #ifdef HAS_WEBENGINE
-    m_editorView->page()->runJavaScript(
-        QString("colasonAPI.setZoom(%1)").arg(m_zoomPercent));
+    QString js = QString("colasonAPI.setZoom(%1)").arg(m_zoomPercent);
+    for (auto* p : m_panes) p->page()->runJavaScript(js);
 #endif
 }
 
@@ -534,8 +686,8 @@ void MainWindow::zoomOut()
 {
     m_zoomPercent = qMax(m_zoomPercent - 10, 50);
 #ifdef HAS_WEBENGINE
-    m_editorView->page()->runJavaScript(
-        QString("colasonAPI.setZoom(%1)").arg(m_zoomPercent));
+    QString js = QString("colasonAPI.setZoom(%1)").arg(m_zoomPercent);
+    for (auto* p : m_panes) p->page()->runJavaScript(js);
 #endif
 }
 
@@ -543,34 +695,35 @@ void MainWindow::resetZoom()
 {
     m_zoomPercent = 100;
 #ifdef HAS_WEBENGINE
-    m_editorView->page()->runJavaScript("colasonAPI.setZoom(100)");
+    for (auto* p : m_panes) p->page()->runJavaScript("colasonAPI.setZoom(100)");
 #endif
 }
 
 void MainWindow::executeEditorCommand(const QString& command, const QString& argsJson)
 {
 #ifdef HAS_WEBENGINE
-    QString escaped = argsJson;
-    escaped.replace("'", "\\'");
-    QString js = QString("colasonAPI.executeCommand('%1', '%2')").arg(command, escaped);
-    m_editorView->page()->runJavaScript(js);
+    if (!m_activePane) return;
+    QString js = QString("colasonAPI.executeCommand(%1, %2)").arg(jsQuote(command), jsQuote(argsJson));
+    m_activePane->page()->runJavaScript(js);
+#else
+    Q_UNUSED(command);
+    Q_UNUSED(argsJson);
 #endif
 }
 
 void MainWindow::quickOpen()
 {
+    if (!m_activePane) return;
     QString rootDir = m_sidebar->rootPath();
-    if (rootDir.isEmpty()) {
-        rootDir = QDir::homePath();
-    }
+    if (rootDir.isEmpty()) rootDir = QDir::homePath();
 
     QuickOpenDialog dialog(rootDir, this);
     if (dialog.exec() == QDialog::Accepted) {
         QString path = dialog.selectedFile();
         if (!path.isEmpty()) {
-            m_docManager->openDocument(path);
+            m_activePane->docManager()->openDocument(path);
             m_recentFiles->addFile(path);
-            setEditorMarkdown(m_docManager->currentContent());
+            setActivePaneMarkdown(m_activePane->docManager()->currentContent());
             updateTitle();
         }
     }
@@ -578,14 +731,11 @@ void MainWindow::quickOpen()
 
 void MainWindow::showExportPdfDialog()
 {
-    QString path = QFileDialog::getSaveFileName(
-        this, tr("Export PDF"), QString(),
-        tr("PDF Files (*.pdf)"));
-
+    if (!m_activePane) return;
+    QString path = QFileDialog::getSaveFileName(this, tr("Export PDF"), QString(), tr("PDF Files (*.pdf)"));
     if (path.isEmpty()) return;
-
 #ifdef HAS_WEBENGINE
-    m_editorView->page()->runJavaScript("colasonAPI.getContent()", [this, path](const QVariant& result) {
+    m_activePane->page()->runJavaScript("colasonAPI.getContent()", [this, path](const QVariant& result) {
         QString themeCss = m_themeManager->themeCSS(m_themeManager->currentThemeName());
         m_exportManager->exportToPdf(result.toString(), path, themeCss);
     });
@@ -594,29 +744,19 @@ void MainWindow::showExportPdfDialog()
 
 void MainWindow::showExportHtmlDialog()
 {
-    QString path = QFileDialog::getSaveFileName(
-        this, tr("Export HTML"), QString(),
-        tr("HTML Files (*.html)"));
-
+    if (!m_activePane) return;
+    QString path = QFileDialog::getSaveFileName(this, tr("Export HTML"), QString(), tr("HTML Files (*.html)"));
     if (path.isEmpty()) return;
-
 #ifdef HAS_WEBENGINE
-    m_editorView->page()->runJavaScript("colasonAPI.getContent()", [this, path](const QVariant& result) {
+    m_activePane->page()->runJavaScript("colasonAPI.getContent()", [this, path](const QVariant& result) {
         QString themeCss = m_themeManager->themeCSS(m_themeManager->currentThemeName());
         m_exportManager->exportToHtml(result.toString(), path, themeCss, true);
     });
 #endif
 }
 
-void MainWindow::showThemeMenu()
-{
-    // Theme selection is handled via menu actions set up in MenuBarManager
-}
-
-void MainWindow::changeTheme(const QString& themeName)
-{
-    m_prefs->setTheme(themeName);
-}
+void MainWindow::showThemeMenu() {}
+void MainWindow::changeTheme(const QString& themeName) { m_prefs->setTheme(themeName); }
 
 void MainWindow::setTitleBarAutoHide(bool enabled)
 {
@@ -625,19 +765,14 @@ void MainWindow::setTitleBarAutoHide(bool enabled)
     m_titleBarAutoHide = false;
     QSettings settings;
     settings.setValue("window/titleBarAutoHide", false);
-    if (m_titleBarHideTimer) {
-        m_titleBarHideTimer->stop();
-    }
-    if (m_menuWidget) {
-        m_menuWidget->setVisible(true);
-    }
+    if (m_titleBarHideTimer) m_titleBarHideTimer->stop();
+    if (m_menuWidget) m_menuWidget->setVisible(true);
     m_titleBarShown = true;
     return;
 #else
     m_titleBarAutoHide = enabled;
     QSettings settings;
     settings.setValue("window/titleBarAutoHide", enabled);
-
     if (!enabled) {
         m_titleBarHideTimer->stop();
         m_menuWidget->setVisible(true);
@@ -648,136 +783,130 @@ void MainWindow::setTitleBarAutoHide(bool enabled)
 #endif
 }
 
-void MainWindow::setEditorMarkdown(const QString& markdown)
+// ----------------------------------------------------------------------
+// Active-pane content helpers
+// ----------------------------------------------------------------------
+
+void MainWindow::setActivePaneMarkdown(const QString& markdown)
 {
 #ifdef HAS_WEBENGINE
-    // Use runJavaScript directly for reliability (bypasses QWebChannel signal timing)
-    QJsonArray arr;
-    arr.append(markdown);
-    QString jsonMd = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
-    QString jsonStr = jsonMd.mid(1, jsonMd.size() - 2); // extract JSON string
-
+    if (!m_activePane) return;
     QString js = QString(
         "if(typeof colasonAPI!=='undefined' && colasonAPI.setMarkdown){"
         "colasonAPI.setMarkdown(%1);"
         "} else { console.error('[Colason] colasonAPI.setMarkdown not available'); }"
-    ).arg(jsonStr);
-    m_editorView->page()->runJavaScript(js);
+    ).arg(jsQuote(markdown));
+    m_activePane->page()->runJavaScript(js);
+#else
+    Q_UNUSED(markdown);
 #endif
 }
 
-void MainWindow::setEditorHtml(const QString& html)
+void MainWindow::setActivePaneHtml(const QString& html)
 {
 #ifdef HAS_WEBENGINE
-    QJsonArray arr;
-    arr.append(html);
-    QString jsonHtml = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
-    QString jsonStr = jsonHtml.mid(1, jsonHtml.size() - 2);
-
+    if (!m_activePane) return;
     QString js = QString(
         "if(typeof colasonAPI!=='undefined' && colasonAPI.setContent){"
         "colasonAPI.setContent(%1);"
         "} else { console.error('[Colason] colasonAPI.setContent not available'); }"
-    ).arg(jsonStr);
-    m_editorView->page()->runJavaScript(js);
+    ).arg(jsQuote(html));
+    m_activePane->page()->runJavaScript(js);
+#else
+    Q_UNUSED(html);
 #endif
 }
 
 QString MainWindow::editorContent() const
 {
-    return m_docManager->currentContent();
+    return m_activePane ? m_activePane->docManager()->currentContent() : QString();
 }
 
 void MainWindow::updateTitle()
 {
     QString title = "untitled";
-    QString filePath = m_docManager->currentFilePath();
-
+    QString filePath;
+    bool dirty = false;
+    if (m_activePane) {
+        filePath = m_activePane->docManager()->currentFilePath();
+        dirty = m_activePane->docManager()->isDirty();
+    }
     if (!filePath.isEmpty()) {
         QFileInfo fi(filePath);
         title = fi.fileName();
     }
-
-    if (m_docManager->isDirty()) {
-        title = "* " + title;
+    if (m_panes.size() > 1) {
+        title += QString(" — %1 panes").arg(m_panes.size());
     }
-
+    if (dirty) title = "* " + title;
     setWindowTitle(title);
 }
 
+// ----------------------------------------------------------------------
+// Theme
+// ----------------------------------------------------------------------
+
 void MainWindow::applyTheme(const QString& themeName, const QString& css, const QString& qss)
 {
-    // Apply QSS to native widgets
     qApp->setStyleSheet(qss);
 
-    // Apply title bar color to match theme
 #ifdef Q_OS_WIN
     COLORREF captionColor = 0;
     COLORREF textColor = 0;
     BOOL useDarkMode = FALSE;
-
-    if (themeName == "dark") {
-        captionColor = RGB(43, 43, 43);       // #2b2b2b
-        textColor = RGB(187, 187, 187);       // #bbbbbb
-        useDarkMode = TRUE;
-    } else if (themeName == "github-light") {
-        captionColor = RGB(246, 248, 250);    // #f6f8fa
-        textColor = RGB(36, 41, 47);          // #24292f
-    } else if (themeName == "github-dark") {
-        captionColor = RGB(22, 27, 34);       // #161b22
-        textColor = RGB(230, 237, 243);       // #e6edf3
-        useDarkMode = TRUE;
-    } else if (themeName == "sepia") {
-        captionColor = RGB(214, 201, 168);    // #d6c9a8
-        textColor = RGB(61, 43, 31);          // #3d2b1f
-    } else if (themeName == "nord") {
-        captionColor = RGB(46, 52, 64);       // #2e3440
-        textColor = RGB(216, 222, 233);       // #d8dee9
-        useDarkMode = TRUE;
-    } else if (themeName == "dracula") {
-        captionColor = RGB(33, 34, 44);       // #21222c
-        textColor = RGB(248, 248, 242);       // #f8f8f2
-        useDarkMode = TRUE;
-    } else { // light
-        captionColor = RGB(250, 251, 252);    // #fafbfc
-        textColor = RGB(36, 41, 46);          // #24292e
-    }
+    if (themeName == "dark") { captionColor = RGB(43,43,43); textColor = RGB(187,187,187); useDarkMode = TRUE; }
+    else if (themeName == "github-light") { captionColor = RGB(246,248,250); textColor = RGB(36,41,47); }
+    else if (themeName == "github-dark")  { captionColor = RGB(22,27,34); textColor = RGB(230,237,243); useDarkMode = TRUE; }
+    else if (themeName == "sepia")        { captionColor = RGB(214,201,168); textColor = RGB(61,43,31); }
+    else if (themeName == "nord")         { captionColor = RGB(46,52,64); textColor = RGB(216,222,233); useDarkMode = TRUE; }
+    else if (themeName == "dracula")      { captionColor = RGB(33,34,44); textColor = RGB(248,248,242); useDarkMode = TRUE; }
+    else                                  { captionColor = RGB(250,251,252); textColor = RGB(36,41,46); }
 
     HWND hwnd = reinterpret_cast<HWND>(winId());
     DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkMode, sizeof(useDarkMode));
     DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &captionColor, sizeof(captionColor));
     DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, &textColor, sizeof(textColor));
+#else
+    Q_UNUSED(themeName);
 #endif
 
-    // Apply CSS to web editor — inject directly into DOM for reliability
 #ifdef HAS_WEBENGINE
     injectThemeCSS(css);
+#else
+    Q_UNUSED(css);
 #endif
 }
 
 void MainWindow::injectThemeCSS(const QString& css)
 {
 #ifdef HAS_WEBENGINE
-    // JSON-encode the CSS string for safe JavaScript injection
-    QJsonArray arr;
-    arr.append(css);
-    QString jsonStr = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
-    // jsonStr is like ["css content here"] — extract just the quoted string
-    QString jsonCss = jsonStr.mid(1, jsonStr.size() - 2);
+    // Map the Qt theme name to the web-side `data-theme` token so the
+    // tokens.css `html[data-theme='...']` overrides do not outrank
+    // the `:root` rules we inject here.
+    const QString themeName = m_themeManager->currentThemeName();
+    QString webTheme;
+    if (themeName == "light" || themeName == "github-light") {
+        webTheme = "light";
+    } else if (themeName == "sepia") {
+        webTheme = "sepia";
+    } else {
+        webTheme = "dark"; // dark / github-dark / nord / dracula / custom
+    }
 
-    // Inject directly into DOM — no dependency on colasonAPI
-    // appendChild moves existing element to end of <head>, ensuring highest cascade priority
     QString js = QString(
         "(function(){"
         "if(!document.head) return;"
         "var el=document.getElementById('colason-theme');"
-        "if(!el){el=document.createElement('style');el.id='colason-theme';}"
+        "if(!el){el=document.createElement('style');el.id='colason-theme';document.head.appendChild(el);}"
         "el.textContent=%1;"
-        "document.head.appendChild(el);"
+        "document.documentElement.setAttribute('data-theme', %2);"
+        "document.documentElement.setAttribute('data-theme-mode', %2);"
+        "document.documentElement.style.colorScheme = (%2 === 'dark') ? 'dark' : 'light';"
+        "try { localStorage.setItem('colason.theme', %2); } catch(e) {}"
+        "document.dispatchEvent(new CustomEvent('colason:themechange', { detail: { mode: %2, resolved: %2 } }));"
         "})()"
-    ).arg(jsonCss);
-
-    m_editorView->page()->runJavaScript(js);
+    ).arg(jsQuote(css), jsQuote(webTheme));
+    for (auto* p : m_panes) p->page()->runJavaScript(js);
 #else
     Q_UNUSED(css);
 #endif
@@ -786,7 +915,6 @@ void MainWindow::injectThemeCSS(const QString& css)
 void MainWindow::checkDraftRecovery()
 {
     if (!m_draftManager->hasRecoverableDrafts()) return;
-
     auto ret = QMessageBox::question(
         this, tr("Recover Draft"),
         tr("Unsaved drafts were found. Would you like to recover them?"),
@@ -794,47 +922,29 @@ void MainWindow::checkDraftRecovery()
 
     if (ret == QMessageBox::Yes) {
         QStringList drafts = m_draftManager->recoverableDraftPaths();
-        if (!drafts.isEmpty()) {
+        if (!drafts.isEmpty() && m_activePane) {
             QString content = m_draftManager->readDraft(drafts.first());
-            setEditorHtml(content);
-            m_docManager->setDirty(true);
+            setActivePaneHtml(content);
+            m_activePane->docManager()->setDirty(true);
             updateTitle();
         }
     } else if (ret == QMessageBox::No) {
         m_draftManager->deleteAllDrafts();
     }
-    // Ignore: leave drafts for next launch
 }
 
 void MainWindow::applyPreferences()
 {
-    // Apply theme
     if (m_prefs->autoDetectTheme()) {
         m_themeManager->detectSystemTheme();
     } else {
         m_themeManager->setTheme(m_prefs->theme());
     }
 
-    // Apply theme CSS and keybinding once the editor page finishes loading
-#ifdef HAS_WEBENGINE
-    connect(m_editorView->page(), &QWebEnginePage::loadFinished, this, [this](bool ok) {
-        if (!ok) return;
+    m_wideMode = QSettings().value("view/wideMode", false).toBool();
 
-        // Re-apply theme CSS to WebEngine
-        QString themeName = m_themeManager->currentThemeName();
-        QString css = m_themeManager->themeCSS(themeName);
-        if (!css.isEmpty()) {
-            injectThemeCSS(css);
-        }
-
-        // Apply keybinding
-        QString keybinding = m_prefs->keybinding();
-        if (keybinding != "default") {
-            QString js = QString("colasonAPI.setKeybinding && colasonAPI.setKeybinding('%1')").arg(keybinding);
-            m_editorView->page()->runJavaScript(js);
-        }
-    }, Qt::SingleShotConnection);
-#endif
+    // The per-pane loadFinished handler (wirePane) re-applies theme/wide/keybinding,
+    // so nothing else is needed here.
 }
 
 void MainWindow::changeEvent(QEvent* event)
@@ -854,7 +964,6 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
     case WM_NCCALCSIZE: {
         if (msg->wParam == TRUE) {
             auto* params = reinterpret_cast<NCCALCSIZE_PARAMS*>(msg->lParam);
-            // When maximized, constrain to work area so we don't cover the taskbar
             if (IsZoomed(msg->hwnd)) {
                 HMONITOR mon = MonitorFromWindow(msg->hwnd, MONITOR_DEFAULTTONEAREST);
                 MONITORINFO mi = {sizeof(mi)};
@@ -867,24 +976,18 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
         }
         break;
     }
-
     case WM_NCHITTEST: {
         const int x = GET_X_LPARAM(msg->lParam);
         const int y = GET_Y_LPARAM(msg->lParam);
-
         RECT rect;
         GetWindowRect(msg->hwnd, &rect);
-
-        // Resize borders (skip when maximized)
         if (!IsZoomed(msg->hwnd)) {
             const int bw = GetSystemMetrics(SM_CXSIZEFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
             const int bh = GetSystemMetrics(SM_CYSIZEFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
-
             const bool left   = (x - rect.left)   < bw;
             const bool right  = (rect.right - x)  < bw;
             const bool top    = (y - rect.top)     < bh;
             const bool bottom = (rect.bottom - y)  < bh;
-
             if (top && left)     { *result = HTTOPLEFT;     return true; }
             if (top && right)    { *result = HTTOPRIGHT;    return true; }
             if (bottom && left)  { *result = HTBOTTOMLEFT;  return true; }
@@ -894,34 +997,25 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
             if (top)             { *result = HTTOP;         return true; }
             if (bottom)          { *result = HTBOTTOM;      return true; }
         }
-
         const QPoint localPos = mapFromGlobal(QPoint(x, y));
-
-        // Auto-hide title bar: show/hide based on mouse position
         if (m_titleBarAutoHide) {
             const int activeTbHeight = (m_titleBarShown && m_menuWidget)
                                            ? qMax(m_menuWidget->height(), 32) : 0;
             const int hoverZone = m_titleBarShown ? activeTbHeight : 5;
-
             if (localPos.y() >= 0 && localPos.y() < hoverZone) {
-                // Mouse in title bar area or trigger zone at top edge
                 if (!m_titleBarShown) {
                     m_menuWidget->setVisible(true);
                     m_titleBarShown = true;
                 }
                 m_titleBarHideTimer->stop();
             } else if (m_titleBarShown) {
-                // Mouse moved below title bar - schedule hide
                 if (!m_titleBarHideTimer->isActive()) {
                     m_titleBarHideTimer->start(500);
                 }
             }
         }
-
-        // Title bar (menu widget) area: draggable unless over an interactive widget
         const int tbHeight = (m_menuWidget && m_menuWidget->isVisible())
                                  ? qMax(m_menuWidget->height(), 32) : 0;
-
         if (tbHeight > 0 && localPos.y() >= 0 && localPos.y() < tbHeight) {
             QWidget* child = childAt(localPos);
             bool interactive = false;
@@ -938,18 +1032,13 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
                 return true;
             }
         }
-
-        // When title bar is hidden, top 5px is still draggable
-        if (m_titleBarAutoHide && !m_titleBarShown
-            && localPos.y() >= 0 && localPos.y() < 5) {
+        if (m_titleBarAutoHide && !m_titleBarShown && localPos.y() >= 0 && localPos.y() < 5) {
             *result = HTCAPTION;
             return true;
         }
-
         *result = HTCLIENT;
         return true;
     }
-
     case WM_GETMINMAXINFO: {
         auto* mmi = reinterpret_cast<MINMAXINFO*>(msg->lParam);
         HMONITOR mon = MonitorFromWindow(msg->hwnd, MONITOR_DEFAULTTONEAREST);
@@ -971,28 +1060,29 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    if (m_docManager->isDirty()) {
+    // Check any dirty pane
+    bool anyDirty = false;
+    for (auto* p : m_panes) {
+        if (p->docManager()->isDirty()) { anyDirty = true; break; }
+    }
+    if (anyDirty) {
         auto ret = QMessageBox::question(
             this, tr("Unsaved Changes"),
             tr("Do you want to save changes before closing?"),
             QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
-
         if (ret == QMessageBox::Save) {
-            saveFile();
+            saveFile();  // saves active pane only
         } else if (ret == QMessageBox::Cancel) {
             event->ignore();
             return;
         }
     }
 
-    // Save window geometry
     QSettings settings;
     settings.setValue("window/geometry", saveGeometry());
     settings.setValue("window/state", saveState());
 
-    // Clean up drafts on normal exit
     m_draftManager->deleteAllDrafts();
-
     event->accept();
 }
 
@@ -1005,16 +1095,16 @@ void MainWindow::dragEnterEvent(QDragEnterEvent* event)
 
 void MainWindow::dropEvent(QDropEvent* event)
 {
+    if (!m_activePane) return;
     const auto urls = event->mimeData()->urls();
     if (urls.isEmpty()) return;
 
     QString path = urls.first().toLocalFile();
 
-    // Image files: handle via ImageManager
     QStringList imageExts = {"png", "jpg", "jpeg", "gif", "svg", "bmp", "webp"};
     QFileInfo fi(path);
     if (imageExts.contains(fi.suffix().toLower())) {
-        QString docDir = QFileInfo(m_docManager->currentFilePath()).absolutePath();
+        QString docDir = QFileInfo(m_activePane->docManager()->currentFilePath()).absolutePath();
         if (!docDir.isEmpty()) {
             QString relativePath = m_imageManager->handleImageDrop(path, docDir);
             executeEditorCommand("insertImage",
@@ -1023,11 +1113,10 @@ void MainWindow::dropEvent(QDropEvent* event)
         return;
     }
 
-    // Markdown files: open
     if (path.endsWith(".md") || path.endsWith(".markdown") || path.endsWith(".txt")) {
-        m_docManager->openDocument(path);
+        m_activePane->docManager()->openDocument(path);
         m_recentFiles->addFile(path);
-        setEditorMarkdown(m_docManager->currentContent());
+        setActivePaneMarkdown(m_activePane->docManager()->currentContent());
         updateTitle();
     }
 }

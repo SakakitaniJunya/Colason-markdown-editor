@@ -4,12 +4,9 @@
 #include <QSplitter>
 #include <QLabel>
 #include <QTimer>
+#include <QList>
 
-#ifdef HAS_WEBENGINE
-#include <QWebEngineView>
-#include <QWebChannel>
-#endif
-
+class EditorPane;
 class EditorBridge;
 class OutlineBridge;
 class SearchBridge;
@@ -44,6 +41,12 @@ public slots:
     void toggleSourceMode();
     void toggleFocusMode();
     void toggleTypewriterMode();
+    void toggleWideMode();
+    void openInNewWindow();
+    void splitRight();
+    void splitDown();
+    void closeActivePane();
+    void focusNextPane();
     void zoomIn();
     void zoomOut();
     void resetZoom();
@@ -69,35 +72,37 @@ private:
     void setupUI();
     void setupMenuBar();
     void setupFramelessWindow();
-    void setupWebEngine();
     void setupConnections();
     void setupManagers();
-    void loadEditorPage();
     void updateTitle();
-    void setEditorMarkdown(const QString& markdown);
-    void setEditorHtml(const QString& html);
+    void setActivePaneMarkdown(const QString& markdown);
+    void setActivePaneHtml(const QString& html);
     QString editorContent() const;
     void applyTheme(const QString& themeName, const QString& css, const QString& qss);
     void injectThemeCSS(const QString& css);
     void checkDraftRecovery();
     void applyPreferences();
 
-    QSplitter* m_splitter = nullptr;
+    // --- Pane management (VSCode-style in-window split) ---
+    EditorPane* createPane();                  // builds + wires bridges, does NOT add to layout
+    void wirePane(EditorPane* pane);            // connects per-pane bridge signals
+    void loadEditorIntoPane(EditorPane* pane);  // sets URL of the editor HTML
+    void setActivePane(EditorPane* pane);
+    void splitActive(Qt::Orientation orientation);
+    void removePane(EditorPane* pane);
+
+    QSplitter* m_splitter = nullptr;            // sidebar | paneSplitter
+    QSplitter* m_paneSplitter = nullptr;        // holds 1..N EditorPane widgets
+    QList<EditorPane*> m_panes;
+    EditorPane* m_activePane = nullptr;
+
     SidebarContainer* m_sidebar = nullptr;
 
-#ifdef HAS_WEBENGINE
-    QWebEngineView* m_editorView = nullptr;
-    QWebChannel* m_channel = nullptr;
-    EditorBridge* m_editorBridge = nullptr;
-    OutlineBridge* m_outlineBridge = nullptr;
-    SearchBridge* m_searchBridge = nullptr;
-    ThemeBridge* m_themeBridge = nullptr;
-#else
+#ifndef HAS_WEBENGINE
     QWidget* m_editorPlaceholder = nullptr;
 #endif
 
     MenuBarManager* m_menuBarManager = nullptr;
-    DocumentManager* m_docManager = nullptr;
     AutoSaveManager* m_autoSaveManager = nullptr;
     DraftRecoveryManager* m_draftManager = nullptr;
     RecentFilesManager* m_recentFiles = nullptr;
@@ -114,4 +119,5 @@ private:
     QTimer* m_titleBarHideTimer = nullptr;
     bool m_titleBarAutoHide = false;
     bool m_titleBarShown = true;
+    bool m_wideMode = false;
 };

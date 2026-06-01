@@ -1,0 +1,241 @@
+/* ============================================================
+ * Colason — Theme tokens (Light / Dark / Sepia)
+ *
+ * `base.css` defines the canonical Light palette as the default
+ * `:root` set of CSS Custom Properties. This file overrides the
+ * same variables when `<html>` carries a `data-theme` attribute,
+ * so every component that already reads `var(--bg)`, `var(--fg)`,
+ * `var(--code-bg)` etc. switches automatically.
+ *
+ * The "system" mode is implemented in `theme-controller.ts` by
+ * resolving the user's OS-level color scheme to either `light`
+ * or `dark` and writing that resolved value to `data-theme`.
+ *
+ * Acceptance criteria (#4):
+ *   - Light / Dark / Sepia + System
+ *   - All color tokens are CSS variables (here)
+ *   - Sepia base: bg #f4ecd8 / fg #5b4636
+ *   - Preview syntax-highlight palette tracks the active theme
+ * ============================================================ */
+
+/* ---------- Light ---------- */
+/* `data-theme="light"` is intentionally identical to base.css :root,
+ * declared explicitly so toggling away from another theme cleanly
+ * restores the defaults without relying on cascade order.
+ */
+html[data-theme='light'] {
+  --bg: #ffffff;
+  --fg: #333333;
+  --fg-muted: #586069;
+  --fg-subtle: #6a737d;
+  --border: #e1e4e8;
+  --border-light: #eeeeee;
+  --surface: #f6f8fa;
+  --surface-alt: #f8f9fa;
+
+  --link: #4183c4;
+
+  --heading: inherit;
+  --heading-border: #eeeeee;
+
+  --code-bg: #f6f8fa;
+  --code-border: #e1e4e8;
+  --code-fg: #e83e8c;
+
+  --pre-bg: #f6f8fa;
+  --pre-border: #e1e4e8;
+  --pre-fg: inherit;
+
+  --bq-border: #dfe2e5;
+  --bq-fg: #6a737d;
+
+  --th-bg: #f6f8fa;
+  --td-border: #dfe2e5;
+  --tr-alt-bg: #f8f9fa;
+
+  --mark-bg: #fff3a3;
+  --mark-fg: inherit;
+
+  --hr-border: #e1e4e8;
+  --strike-fg: #999999;
+  --selection-bg: #b4d5fe;
+  --placeholder-fg: #adb5bd;
+
+  --scrollbar-thumb: #cccccc;
+  --scrollbar-thumb-hover: #999999;
+
+  --hljs-fg: #24292e;
+  --hljs-keyword: #d73a49;
+  --hljs-string: #032f62;
+  --hljs-comment: #6a737d;
+  --hljs-number: #005cc5;
+  --hljs-function: #6f42c1;
+  --hljs-builtin: #005cc5;
+
+  --mermaid-border: #e1e4e8;
+  --mermaid-bg: #fafbfc;
+  --mermaid-code-bg: #f6f8fa;
+  --mermaid-code-fg: #333333;
+  --mermaid-err-bg: #fff5f5;
+  --mermaid-err-fg: #cc0000;
+  --mermaid-err-border: #ffcccc;
+
+  --katex-border: #e1e4e8;
+  --katex-bg: #fafbfc;
+  --katex-code-bg: #f6f8fa;
+  --katex-code-fg: #333333;
+  --katex-hover-bg: #e8f0fe;
+
+  --task-done-fg: #999999;
+}
+
+/* ---------- Dark ---------- */
+html[data-theme='dark'] {
+  --bg: #0d1117;
+  --fg: #e6edf3;
+  --fg-muted: #8b949e;
+  --fg-subtle: #6e7681;
+  --border: #30363d;
+  --border-light: #21262d;
+  --surface: #161b22;
+  --surface-alt: #1c2128;
+
+  --link: #58a6ff;
+
+  --heading: #f0f6fc;
+  --heading-border: #21262d;
+
+  --code-bg: #161b22;
+  --code-border: #30363d;
+  --code-fg: #ff7b72;
+
+  --pre-bg: #161b22;
+  --pre-border: #30363d;
+  --pre-fg: #e6edf3;
+
+  --bq-border: #30363d;
+  --bq-fg: #8b949e;
+
+  --th-bg: #161b22;
+  --td-border: #30363d;
+  --tr-alt-bg: #161b22;
+
+  --mark-bg: #5d4a00;
+  --mark-fg: #fff8c5;
+
+  --hr-border: #30363d;
+  --strike-fg: #6e7681;
+  --selection-bg: rgba(56, 139, 253, 0.4);
+  --placeholder-fg: #6e7681;
+
+  --scrollbar-thumb: #30363d;
+  --scrollbar-thumb-hover: #484f58;
+
+  --hljs-fg: #e6edf3;
+  --hljs-keyword: #ff7b72;
+  --hljs-string: #a5d6ff;
+  --hljs-comment: #8b949e;
+  --hljs-number: #79c0ff;
+  --hljs-function: #d2a8ff;
+  --hljs-builtin: #79c0ff;
+
+  --mermaid-border: #30363d;
+  --mermaid-bg: #161b22;
+  --mermaid-code-bg: #0d1117;
+  --mermaid-code-fg: #e6edf3;
+  --mermaid-err-bg: #2d0f10;
+  --mermaid-err-fg: #ff7b72;
+  --mermaid-err-border: #5a1d1d;
+
+  --katex-border: #30363d;
+  --katex-bg: #161b22;
+  --katex-code-bg: #0d1117;
+  --katex-code-fg: #e6edf3;
+  --katex-hover-bg: #1f2a3d;
+
+  --task-done-fg: #6e7681;
+}
+
+/* ---------- Sepia ---------- *
+ * Designed for long writing sessions — warm low-contrast paper.
+ * Spec values: bg #f4ecd8 / fg #5b4636.
+ */
+html[data-theme='sepia'] {
+  --bg: #f4ecd8;
+  --fg: #5b4636;
+  --fg-muted: #7b6750;
+  --fg-subtle: #8a755b;
+  --border: #d9cdb3;
+  --border-light: #e6dcc1;
+  --surface: #ece2c7;
+  --surface-alt: #f0e7cf;
+
+  --link: #8a4b1e;
+
+  --heading: #4a3826;
+  --heading-border: #d9cdb3;
+
+  --code-bg: #ece2c7;
+  --code-border: #d9cdb3;
+  --code-fg: #a04e1e;
+
+  --pre-bg: #ece2c7;
+  --pre-border: #d9cdb3;
+  --pre-fg: #5b4636;
+
+  --bq-border: #c8b994;
+  --bq-fg: #7b6750;
+
+  --th-bg: #ece2c7;
+  --td-border: #d9cdb3;
+  --tr-alt-bg: #f0e7cf;
+
+  --mark-bg: #f0d97c;
+  --mark-fg: #4a3826;
+
+  --hr-border: #d9cdb3;
+  --strike-fg: #9b8870;
+  --selection-bg: #e6c98a;
+  --placeholder-fg: #a89378;
+
+  --scrollbar-thumb: #c8b994;
+  --scrollbar-thumb-hover: #a89378;
+
+  --hljs-fg: #5b4636;
+  --hljs-keyword: #a04e1e;
+  --hljs-string: #6b7a3a;
+  --hljs-comment: #9b8870;
+  --hljs-number: #8a4b1e;
+  --hljs-function: #6e4a8a;
+  --hljs-builtin: #8a4b1e;
+
+  --mermaid-border: #d9cdb3;
+  --mermaid-bg: #f0e7cf;
+  --mermaid-code-bg: #ece2c7;
+  --mermaid-code-fg: #5b4636;
+  --mermaid-err-bg: #f5dcd0;
+  --mermaid-err-fg: #a14a3a;
+  --mermaid-err-border: #d9b3a8;
+
+  --katex-border: #d9cdb3;
+  --katex-bg: #f0e7cf;
+  --katex-code-bg: #ece2c7;
+  --katex-code-fg: #5b4636;
+  --katex-hover-bg: #e6d8b0;
+
+  --task-done-fg: #9b8870;
+}
+
+/* ---------- Smooth transition between themes ----------
+ * Animate color/background changes only when the user switches
+ * themes; never on initial paint (handled in JS by toggling
+ * `theme-transitioning` class for ~250ms).
+ */
+html.theme-transitioning,
+html.theme-transitioning body,
+html.theme-transitioning * {
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
+}

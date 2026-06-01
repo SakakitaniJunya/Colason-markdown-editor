@@ -134,6 +134,17 @@ export function setupGlobalAPI(editor: Editor) {
       document.body.classList.toggle('typewriter-mode');
     },
 
+    toggleWideMode() {
+      const enabled = document.body.classList.toggle('wide-mode');
+      try { localStorage.setItem('colason.wideMode', enabled ? '1' : '0'); } catch {}
+      return enabled;
+    },
+
+    setWideMode(enabled: boolean) {
+      document.body.classList.toggle('wide-mode', enabled);
+      try { localStorage.setItem('colason.wideMode', enabled ? '1' : '0'); } catch {}
+    },
+
     scrollToHeading(id: string) {
       const pos = parseInt(id.replace('heading-', ''));
       if (!isNaN(pos)) {
@@ -398,6 +409,15 @@ function escapeRegex(str: string): string {
 // === Notify C++ side ===
 export function notifyContentChanged(html: string) {
   cppBridge?.editor?.contentChanged?.(html);
+}
+
+export function notifyOpenLink(url: string) {
+  if (cppBridge?.editor?.openLinkRequested) {
+    cppBridge.editor.openLinkRequested(url);
+  } else {
+    // standalone fallback
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
 }
 
 export function notifyCursorPosition(line: number, col: number) {

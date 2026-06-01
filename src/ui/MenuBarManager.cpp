@@ -205,6 +205,8 @@ void MenuBarManager::setupFileMenu(QMenuBar* menuBar)
 
     menu->addAction(tr("&New"), m_mainWindow, &MainWindow::newDocument,
                     QKeySequence::New);
+    menu->addAction(tr("New &Window"), m_mainWindow, &MainWindow::openInNewWindow,
+                    QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N));
     menu->addAction(tr("&Open File..."), m_mainWindow, &MainWindow::openFile,
                     QKeySequence::Open);
     menu->addAction(tr("Open &Folder..."), m_mainWindow, &MainWindow::openFolder);
@@ -423,6 +425,30 @@ void MenuBarManager::setupViewMenu(QMenuBar* menuBar)
     connect(typewriterAction, &QAction::triggered, m_mainWindow, [this]() {
         m_mainWindow->toggleTypewriterMode();
     });
+
+    auto* wideModeAction = menu->addAction(tr("&Wide Mode"),
+                                            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W));
+    wideModeAction->setCheckable(true);
+    wideModeAction->setChecked(QSettings().value("view/wideMode", false).toBool());
+    connect(wideModeAction, &QAction::triggered, m_mainWindow, [this, wideModeAction]() {
+        m_mainWindow->toggleWideMode();
+        wideModeAction->setChecked(QSettings().value("view/wideMode", false).toBool());
+    });
+
+    menu->addSeparator();
+
+    // Split / multi-window submenu (VSCode-style in-window split)
+    auto* splitMenu = menu->addMenu(tr("&Editor Split"));
+    splitMenu->addAction(tr("Split &Right"), m_mainWindow, &MainWindow::splitRight,
+                         QKeySequence(Qt::CTRL | Qt::Key_Backslash));
+    splitMenu->addAction(tr("Split &Down"), m_mainWindow, &MainWindow::splitDown,
+                         QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Backslash));
+    splitMenu->addAction(tr("&Close Pane"), m_mainWindow, &MainWindow::closeActivePane,
+                         QKeySequence(Qt::CTRL | Qt::Key_W));
+    splitMenu->addAction(tr("Focus &Next Pane"), m_mainWindow, &MainWindow::focusNextPane,
+                         QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft));
+    splitMenu->addSeparator();
+    splitMenu->addAction(tr("Open in &New Window"), m_mainWindow, &MainWindow::openInNewWindow);
 
     menu->addSeparator();
 

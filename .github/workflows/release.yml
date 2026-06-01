@@ -1,0 +1,166 @@
+name: Release
+
+# Tag (vX.Y.Z) を push すると macOS / Windows のバイナリをビルドし、
+# LGPLv3 準拠のライセンス表記を同梱した上で GitHub Release を作成する。
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  # ----------------------------------------------------------------------------
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: editor/package-lock.json
+
+      - name: Build editor assets
+        working-directory: editor
+        run: npm ci && npm run build
+
+      - name: Install Qt and build tools
+        run: brew update && brew install qt ninja
+
+      - name: Configure & build
+        run: |
+          cmake -S . -B build-macos -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
+          cmake --build build-macos -j3
+
+      - name: Deploy Qt + strip
+        run: |
+          APP_PATH=$(find build-macos -type d -name "colason.app" | head -n 1)
+          rm -rf "$APP_PATH/Contents/Frameworks/QtVirtualKeyboard.framework" 2>/dev/null || true
+          set +e
+          "$(brew --prefix qt)/bin/macdeployqt" "$APP_PATH" -always-overwrite
+          set -e
+          find "$APP_PATH" -name "*.dSYM" -exec rm -rf {} + 2>/dev/null || true
+          find "$APP_PATH" -type f -name "*.dylib" -exec strip -x {} + 2>/dev/null || true
+          strip -x "$APP_PATH/Contents/MacOS/colason" 2>/dev/null || true
+
+      - name: Bundle license notices (LGPLv3 compliance)
+        run: |
+          APP_PATH=$(find build-macos -type d -name "colason.app" | head -n 1)
+          RES="$APP_PATH/Contents/Resources/licenses"
+          mkdir -p "$RES"
+          cp LICENSE THIRD_PARTY_NOTICES.md "$RES/"
+          curl -fsSL https://www.gnu.org/licenses/lgpl-3.0.txt -o "$RES/LGPL-3.0.txt"
+          curl -fsSL https://www.gnu.org/licenses/gpl-3.0.txt  -o "$RES/GPL-3.0.txt"
+
+      - name: Package DMG + ZIP (with top-level licenses/ folder)
+        run: |
+          set -euo pipefail
+          APP_PATH=$(find build-macos -type d -name "colason.app" | head -n 1)
+          APP_DIR=$(dirname "$APP_PATH")
+          mkdir -p build-macos/artifacts
+          cd "$APP_DIR"
+
+          # licenses/ folder visible to the end user inside the package
+          mkdir -p licenses
+          cp "$GITHUB_WORKSPACE/LICENSE" "$GITHUB_WORKSPACE/THIRD_PARTY_NOTICES.md" licenses/
+          curl -fsSL https://www.gnu.org/licenses/lgpl-3.0.txt -o licenses/LGPL-3.0.txt
+
+          zip -r -9 -q "Colason-macOS-app.zip" "colason.app" licenses
+          STAGE="Colason-dmg-stage"; rm -rf "$STAGE"; mkdir -p "$STAGE"
+          cp -R "colason.app" "$STAGE/"; cp -R licenses "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "Colason" -srcfolder "$STAGE" -ov -fs HFS+ -format UDRW Colason-temp.dmg
+          hdiutil convert Colason-temp.dmg -ov -format UDZO -imagekey zlib-level=9 -o "Colason-macOS"
+          hdiutil verify "Colason-macOS.dmg"
+          mv "Colason-macOS-app.zip" "Colason-macOS.dmg" "$GITHUB_WORKSPACE/build-macos/artifacts/"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: colason-macos
+          path: build-macos/artifacts/*
+
+  # ----------------------------------------------------------------------------
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: editor/package-lock.json
+
+      - name: Build editor assets
+        working-directory: editor
+        run: npm ci && npm run build
+
+      # aqtinstall 経由で QtWebEngine 同梱の prebuilt Qt6 を取得（Chromium を自前ビルドしない）
+      - name: Install Qt 6 (with WebEngine)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: "qtwebengine qtwebchannel qtpositioning qtimageformats"
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure & build
+        shell: cmd
+        run: |
+          cmake -S . -B build-win -G "Ninja" -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_PREFIX_PATH="%QT_ROOT_DIR%"
+          cmake --build build-win -j
+
+      - name: Deploy Qt (windeployqt) + bundle licenses
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Recurse -Path build-win -Filter colason.exe | Select-Object -First 1
+          $dist = "dist-win/Colason"
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          Copy-Item $exe.FullName $dist
+          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations "$dist/colason.exe"
+          New-Item -ItemType Directory -Force -Path "$dist/licenses" | Out-Null
+          Copy-Item LICENSE,THIRD_PARTY_NOTICES.md "$dist/licenses/"
+          Invoke-WebRequest https://www.gnu.org/licenses/lgpl-3.0.txt -OutFile "$dist/licenses/LGPL-3.0.txt"
+          Invoke-WebRequest https://www.gnu.org/licenses/gpl-3.0.txt  -OutFile "$dist/licenses/GPL-3.0.txt"
+          Compress-Archive -Path "$dist/*" -DestinationPath "Colason-Windows-x64.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: colason-windows
+          path: Colason-Windows-x64.zip
+
+  # ----------------------------------------------------------------------------
+  release:
+    needs: [build-macos, build-windows]
+    # Windows build がまだ不安定な間も macOS だけは出せるよう、失敗を許容しない場合は
+    # needs を build-macos のみにする運用も可。現状は両方 green を要求。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: List artifacts
+        run: find dist -type f
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Colason ${{ github.event.inputs.tag || github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            dist/**/*.dmg
+            dist/**/*.zip
