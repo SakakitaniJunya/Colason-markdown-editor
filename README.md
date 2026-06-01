@@ -59,6 +59,14 @@ Colason はまだ Apple のコード署名を取得していないため、初�
 
 ---
 
+## スクリーンショット
+
+| Light | Dark | Sepia |
+|:---:|:---:|:---:|
+| ![Light theme](docs/screenshots/theme-light.png) | ![Dark theme](docs/screenshots/theme-dark.png) | ![Sepia theme](docs/screenshots/theme-sepia.png) |
+
+---
+
 ## アーキテクチャ
 
 C++ / Qt6 ネイティブシェルが、QWebEngine 上で動く Web エディタ (TipTap) を

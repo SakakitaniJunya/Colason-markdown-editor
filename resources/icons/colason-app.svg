@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a9bd8"/>
+      <stop offset="1" stop-color="#2f6fb0"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#0a2540" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <!-- squircle background -->
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#bg)"/>
+  <rect x="64" y="64" width="896" height="448" rx="208" fill="url(#sheen)"/>
+
+  <!-- document page -->
+  <g filter="url(#shadow)">
+    <path d="M300 224
+             h300 l124 124
+             v452 a28 28 0 0 1 -28 28
+             H300 a28 28 0 0 1 -28 -28
+             V252 a28 28 0 0 1 28 -28 Z"
+          fill="#ffffff"/>
+    <!-- folded corner -->
+    <path d="M600 224 l124 124 h-96 a28 28 0 0 1 -28 -28 Z" fill="#dbe6f2"/>
+  </g>
+
+  <!-- markdown heading mark "#" in brand blue -->
+  <g fill="#3f7cc0">
+    <rect x="332" y="356" width="150" height="34" rx="17"/>
+  </g>
+  <!-- body lines -->
+  <g fill="#c9d3de">
+    <rect x="332" y="430" width="360" height="22" rx="11"/>
+    <rect x="332" y="476" width="300" height="22" rx="11"/>
+  </g>
+  <!-- code / quote accent block -->
+  <rect x="332" y="528" width="360" height="78" rx="14" fill="#eef4fb"/>
+  <rect x="332" y="528" width="14" height="78" rx="7" fill="#4183c4"/>
+  <g fill="#9bb6d4">
+    <rect x="372" y="548" width="220" height="16" rx="8"/>
+    <rect x="372" y="572" width="160" height="16" rx="8"/>
+  </g>
+  <!-- KaTeX-style radical hint -->
+  <g stroke="#3f7cc0" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M332 672 l24 0 l26 60 l40 -120 l120 0"/>
+  </g>
+  <rect x="430" y="612" width="112" height="14" rx="7" fill="#c9d3de"/>
+</svg>

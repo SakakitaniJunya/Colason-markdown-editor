@@ -328,6 +328,13 @@ void MainWindow::wirePane(EditorPane* pane)
         if (m_zoomPercent != 100) {
             p->page()->runJavaScript(QString("colasonAPI.setZoom(%1)").arg(m_zoomPercent));
         }
+
+        // Open a file passed on the command line / via the OS, once the editor
+        // page is ready (so colasonAPI.setMarkdown is available). Only once.
+        if (!m_initialFileOpened && !m_initialFile.isEmpty() && p == m_activePane) {
+            m_initialFileOpened = true;
+            openPath(m_initialFile);
+        }
     });
 #else
     Q_UNUSED(pane);
@@ -565,16 +572,20 @@ void MainWindow::newDocument()
 
 void MainWindow::openFile()
 {
-    if (!m_activePane) return;
     QString path = QFileDialog::getOpenFileName(
         this, tr("Open File"), QString(),
         tr("Markdown Files (*.md *.markdown *.txt);;All Files (*)"));
     if (path.isEmpty()) return;
+    openPath(path);
+}
 
+void MainWindow::openPath(const QString& path)
+{
+    if (!m_activePane || path.isEmpty()) return;
     m_activePane->docManager()->openDocument(path);
-    m_recentFiles->addFile(path);
+    if (m_recentFiles) m_recentFiles->addFile(path);
     setActivePaneMarkdown(m_activePane->docManager()->currentContent());
-    m_sidebar->setCurrentFile(path);
+    if (m_sidebar) m_sidebar->setCurrentFile(path);
     updateTitle();
 }
 

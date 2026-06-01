@@ -31,9 +31,15 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
 
+public:
+    // Open a file given on the command line / via the OS ("open with"). Safe to call
+    // before the editor page has loaded — the open is deferred until the page is ready.
+    void setInitialFile(const QString& path) { m_initialFile = path; }
+
 public slots:
     void newDocument();
     void openFile();
+    void openPath(const QString& path);   // open a specific file path
     void openFolder();
     void saveFile();
     void saveFileAs();
@@ -120,4 +126,7 @@ private:
     bool m_titleBarAutoHide = false;
     bool m_titleBarShown = true;
     bool m_wideMode = false;
+
+    QString m_initialFile;            // file to open once the editor page is ready
+    bool m_initialFileOpened = false; // guard so it opens only once
 };
