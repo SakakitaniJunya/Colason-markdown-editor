@@ -7,7 +7,7 @@
 | CMake | `c:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe` |
 | Visual Studio | 18 (2026) Community/Professional |
 | Qt6 (aqtinstall) | `c:/Qt/6.8.3/msvc2022_64` |
-| vcpkg | `c:/Users/junya.sakakitani/source/vcpkg` |
+| vcpkg | `<vcpkg-root>` |
 | Node.js + npm | エディタビルド用 |
 
 ### Qt6 モジュール (aqtinstall でインストール)
@@ -29,9 +29,9 @@ Svg, PrintSupport, Concurrent, Qml, Quick, QuickWidgets, Network, OpenGL, Positi
 
 ```bash
 CMAKE="c:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe"
-VCPKG_ROOT="c:/Users/junya.sakakitani/source/vcpkg"
+VCPKG_ROOT="<vcpkg-root>"
 QT_DIR="c:/Qt/6.8.3/msvc2022_64"
-PROJECT="c:/Users/junya.sakakitani/source/private/colason"
+PROJECT="<colason-repo>"
 ```
 
 ### 1. CMake Configure
@@ -91,7 +91,7 @@ cd "$PROJECT/editor" && npm install && npm run build
 ## ワンライナー (再ビルド + 起動)
 
 ```bash
-CMAKE="c:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" && "$CMAKE" --build c:/Users/junya.sakakitani/source/private/colason/build --config Release && c:/Users/junya.sakakitani/source/private/colason/build/src/Release/colason.exe
+CMAKE="c:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" && "$CMAKE" --build <colason-repo>/build --config Release && <colason-repo>/build/src/Release/colason.exe
 ```
 
 ---

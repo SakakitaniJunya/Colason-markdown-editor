@@ -1,8 +1,68 @@
 # Colason
 
-Typora風 WYSIWYG Markdownエディタ。C++20 / Qt6 + QWebEngine ハイブリッドアーキテクチャ。
+> **SPEC 駆動開発時代の、Markdown 専用 WYSIWYG エディタ / リーダー。**
+> A Markdown-only WYSIWYG editor for the spec-driven dev era — Typora-style, native C++20 / Qt6.
+
+![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
+![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)
+![Qt6](https://img.shields.io/badge/Qt-6.8%2B-41CD52?logo=qt&logoColor=white)
+![Release](https://img.shields.io/github/v/release/SakakitaniJunya/Colason-markdown-editor?include_prereleases)
+
+AI が生成する設計書・SPEC・ADR を **「読む / 直す」** ことに最適化した、Typora 風の
+WYSIWYG Markdown エディタです。Mermaid 図・KaTeX 数式・コードブロックをソースと同じ
+見た目で編集でき、執筆中も文書構造 (Outline) が常に見えます。Electron 不使用、
+C++20 / Qt6 ネイティブシェルで、仕様書を一日中開いておくための軽量・高速な作業環境。
+
+クラウド不要・ローカルファイル完結・データはすべて手元に。
+
+> **ステータス**: `v0.1.0` 早期公開版。コア編集体験は実用段階ですが、コード署名・
+> 自動更新・プラグインは今後対応します。フィードバック歓迎 →
+> [Issues](https://github.com/SakakitaniJunya/Colason-markdown-editor/issues)。
+
+---
+
+## ダウンロード
+
+最新のビルド済みアプリは [Releases](https://github.com/SakakitaniJunya/Colason-markdown-editor/releases) から:
+
+| OS | ファイル |
+|----|---------|
+| macOS (Apple Silicon) | `Colason-macOS.dmg` |
+| Windows (x64) | `Colason-Windows-x64.zip` |
+
+ソースからビルドしたい場合は [ビルド手順](#ビルド手順-開発者向け) を参照してください。
+
+### macOS で「開けません」と表示される場合
+
+Colason はまだ Apple のコード署名を取得していないため、初回起動時に Gatekeeper の
+警告が出ます。以下のいずれかで起動できます（初回のみ）:
+
+1. **Finder で `Colason.app` を右クリック → 「開く」→ ダイアログで「開く」**
+2. もしくはターミナルで隔離属性を解除:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Colason.app
+   ```
+
+将来のリリースで署名・notarization 対応を予定しています。
+
+---
+
+## できること
+
+- 📝 **WYSIWYG 編集** (TipTap / ProseMirror) ↔ **ソースモード** (CodeMirror 6) 切替
+- 🧮 **KaTeX 数式** ・ **Mermaid 図** ・ コードハイライト (highlight.js) をネイティブ描画
+- 🗂 **アウトライン** / ファイルツリー / **分割ペイン** (Split Right / Down) / ワイドモード
+- 🎨 **テーマ切替** (Light / Dark / Sepia / System 追従)
+- 📤 PDF / HTML エクスポート、オートセーブ
+- ⚡ C++20 / Qt6 ネイティブシェルによる軽快な動作 (ブラウザタブではなく独立アプリ)
+
+---
 
 ## アーキテクチャ
+
+C++ / Qt6 ネイティブシェルが、QWebEngine 上で動く Web エディタ (TipTap) を
+QWebChannel ブリッジ経由で制御するハイブリッド構成です。
 
 ```mermaid
 graph TB
@@ -51,148 +111,97 @@ graph TB
     TT --> HL
 ```
 
-## 前提条件
+---
+
+## ビルド手順 (開発者向け)
+
+### 前提条件
 
 - CMake 3.25+
 - Qt 6.8+ (Core / Gui / Widgets / WebEngine / WebChannel)
-- Node.js (エディタビルド用)
+- Node.js 20+ (エディタアセットのビルド用)
 - 任意: vcpkg (依存解決に使用)
 
-### Windows (MSVC)
+> 以下のコマンド例の `<vcpkg-root>` は各自の vcpkg のパスに読み替えてください。
 
-- Visual Studio 2026 (MSVC)
-- Qt 6.8.3 (`c:/Qt/6.8.3/msvc2022_64`)
-- vcpkg (`c:/Users/junya.sakakitani/source/vcpkg`)
-
-### macOS / Linux
-
-- Ninja
-- Qt6 開発パッケージ
-- `cmake --preset macos-debug` または `cmake --preset linux-debug` を使用
-
-## ビルド & 起動
-
-```bash
-# エディタ (TypeScript) ビルド
-cd editor && npm install && npm run build && cd ..
-
-# CMake configure
-"c:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" \
-  -S . -B build \
-  -G "Visual Studio 18 2026" -A x64 \
-  -DCMAKE_TOOLCHAIN_FILE="c:/Users/junya.sakakitani/source/vcpkg/scripts/buildsystems/vcpkg.cmake" \
-  -DVCPKG_TARGET_TRIPLET=x64-windows \
-  -DVCPKG_MANIFEST_MODE=OFF \
-  -DCMAKE_PREFIX_PATH="c:/Qt/6.8.3/msvc2022_64;c:/Users/junya.sakakitani/source/vcpkg/installed/x64-windows"
-
-# ビルド
-"c:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" \
-  --build build --config Release
-
-# 起動
-./build/src/Release/colason.exe
-```
-
-## ビルド & 起動 (ワンライナー)
-
-```bash
-"c:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --build build --config Release && ./build/src/Release/colason.exe
-```
-
-## ビルド & 起動 (macOS ローカル)
-
-**前提: Homebrew がインストール済み**
+### macOS (Homebrew)
 
 ```bash
 # 1. 依存をインストール（初回のみ）
 brew install qt ninja node
 
 # 2. エディタ (TypeScript) をビルド
-cd editor
-npm install
-npm run build
-cd ..
+cd editor && npm install && npm run build && cd ..
 
-# 3. CMake configure
-cmake -S . -B build-macos \
-  -G Ninja \
+# 3. CMake configure & build
+cmake -S . -B build-macos -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
-
-# 4. ビルド
 cmake --build build-macos -j4
 
-# 5. 起動（デバッグ用、ローカルテスト）
+# 4. 起動（ローカルテスト）
 ./build-macos/src/colason
 
-# または、.app/.dmg を生成（配布用）
+# 5. 配布用 .app / .dmg を生成
 APP_PATH="./build-macos/src/colason.app"
 "$(brew --prefix qt)/bin/macdeployqt" "$APP_PATH" -always-overwrite
-
-# シンボル削除（軽量化）
-find "$APP_PATH" -name "*.dSYM" -exec rm -rf {} + 2>/dev/null || true
-
-# DMG 作成（アップロード用）
-hdiutil create \
-  -volname "Colason" \
-  -srcfolder "$(dirname $APP_PATH)" \
-  -ov -format UDZIPPIG \
-  "Colason-macOS.dmg"
+hdiutil create -volname "Colason" -srcfolder "$(dirname $APP_PATH)" \
+  -ov -format UDZO "Colason-macOS.dmg"
 ```
 
-### サイズ最適化のコツ
+### Windows (MSVC)
 
-- `macdeployqt` の `-always-overwrite` で不完全なリンク警告を無視
-- `find ... -name "*.dSYM" -delete` でデバッグシンボルを削除
-- `strip` で更にバイナリを最適化: `strip -r "$APP_PATH/Contents/MacOS/colason"`
-- DMG は `UDZIPPIG` 形式で自動圧縮
-
-## ビルド & 起動 (Linux)
+- Visual Studio 2022+ (MSVC) / Qt 6.8+ (`msvc2022_64`) / vcpkg
 
 ```bash
-# Configure
+cd editor && npm install && npm run build && cd ..
+
+cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="<your-qt-path>/msvc2022_64;<vcpkg-root>/installed/x64-windows"
+cmake --build build --config Release
+./build/src/colason.exe
+```
+
+### Linux
+
+```bash
 cmake --preset linux-debug
-
-# Build
 cmake --build --preset linux-debug
-
-# Run
 ./build/linux-debug/src/colason
 ```
+
+> CI による自動ビルド・配布は [`.github/workflows/release.yml`](.github/workflows/release.yml)
+> を参照（tag `vX.Y.Z` を push すると macOS / Windows バイナリを生成）。
+
+---
 
 ## ライセンス / License
 
 Colason は **GNU General Public License v3.0 (GPLv3)** で公開されています。
-全文は [`LICENSE`](./LICENSE) を参照してください。
+全文は [`LICENSE`](./LICENSE) を、第三者コンポーネントは
+[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) を参照してください。
 
 ### Qt について (LGPLv3)
 
 Colason は [Qt 6](https://www.qt.io/) framework を **動的リンク**して利用しています
 （Qt は別個の共有ライブラリ / framework として同梱され、実行ファイルに静的結合されません）。
 利用している Qt モジュールはすべて **LGPL-3.0** で提供されるものに限られ、GPL-only /
-商用専用モジュールは使用していません。
-
-LGPLv3 の義務に従い、配布物には以下が同梱されます（詳細は
-[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)）:
-
-- **再リンクの権利**: 同梱の Qt ライブラリを互換・改変版 Qt に差し替えて Colason を
-  利用できます（macOS: `Colason.app/Contents/Frameworks` / Windows: `colason.exe` と同階層の DLL）。
-- **Qt ソースの入手先**: 同梱 Qt バージョンの完全な対応ソースは
-  https://download.qt.io/archive/qt/ から入手できます。入手できない場合は
-  legal@creanest.co への書面請求で提供します。
-- **Chromium**: Qt WebEngine は Chromium (BSD-3-Clause ほか) を内包し、その第三者
-  ライセンス一覧は Qt WebEngine リソースおよび上記 Qt ソースに含まれます。
-
-### Web エディタ部 (npm)
-
-アプリ内エディタは Qt WebEngine 上で動作する web bundle で、TipTap / CodeMirror /
-KaTeX / mermaid / marked / highlight.js (BSD-3-Clause) ほか、いずれも MIT / BSD 系の
-OSS から構成されています。各ライセンスは [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) を参照。
+商用専用モジュールは使用していません。LGPLv3 の義務に従い、配布物には LICENSE +
+THIRD_PARTY_NOTICES + LGPL/GPL 全文 (`licenses/`) を同梱し、Qt ライブラリの差し替え
+（再リンク）を許容しています。同梱 Qt の対応ソースは
+https://download.qt.io/archive/qt/ から入手できます。
 
 ### 商用利用について
 
-著作権者 (CreaNest) は本ソフトウェアの 100% の著作権を保有しており、GPLv3 の義務を
-負わない形での利用を希望する場合の**商用ライセンス**を別途提供可能です
-（お問い合わせ: legal@creanest.co）。なお GPLv3 で配布されたバイナリ／ソースは
-GPLv3 の条件下で自由に再配布できます。
+著作権者 (CreaNest) は Colason **本体コード**の 100% の著作権を保有しており、GPLv3 の
+義務を負わない形での利用を希望する場合の**商用ライセンス**を別途提供可能です
+（お問い合わせ: legal@creanest.co）。
 
+> ⚠️ 商用ライセンスは Colason 本体コードに対してのみ適用されます。Qt6 (LGPLv3) および
+> Qt WebEngine が内包する Chromium 等、第三者 OSS の義務は引き続き各ライセンスに従います
+> （CreaNest が解除できるものではありません）。GPLv3 で配布されたバイナリ／ソースは
+> GPLv3 の条件下で自由に再配布できます。
+
+---
+
+Built by [CreaNest](https://creanest.co).

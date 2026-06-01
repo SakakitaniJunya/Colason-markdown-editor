@@ -15,3 +15,9 @@ CMakeSettings.json
 *.pdb
 *.ilk
 aqtinstall.log
+
+# 公開対象外 (内部運営 briefing / 本業パス混入 / ブランド素材)
+CLAUDE.md
+run.bat
+creanest-card.html
+creanest-card-design/

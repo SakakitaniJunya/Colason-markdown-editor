@@ -59,7 +59,7 @@ npm run build
 ```bash
 # パス定義
 CMAKE="c:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe"
-VCPKG_ROOT="c:/Users/junya.sakakitani/source/vcpkg"
+VCPKG_ROOT="<vcpkg-root>"
 QT_DIR="c:/Qt/6.8.3/msvc2022_64"
 
 # キャッシュクリア (ジェネレータ変更時のみ)

@@ -39,8 +39,10 @@ In accordance with the GNU Lesser General Public License v3.0:
    bundled with this release is available from the Qt Project:
    - https://download.qt.io/archive/qt/  (select the matching 6.x version)
    - https://code.qt.io/cgit/qt/qt5.git/  (git mirror)
-   If you cannot obtain the matching Qt source through the links above, the copyright
-   holder will provide it on written request to **legal@creanest.co**.
+   The exact Qt version bundled in each release is recorded in `licenses/QT_VERSION.txt`
+   inside the distributed package. If you cannot obtain the matching Qt source through
+   the links above, the copyright holder will provide it on written request to
+   **legal@creanest.co**.
 3. **License texts.** The full LGPLv3 and GPLv3 texts are included with every
    distribution. The LGPLv3 text is available at
    https://www.gnu.org/licenses/lgpl-3.0.txt and incorporates the GPLv3 by reference.
@@ -58,20 +60,21 @@ and is reproduced in the Qt source archive referenced above.
 ## Web editor bundle (npm) — MIT / BSD
 
 The in-app editor is a web bundle rendered inside Qt WebEngine. It is built from the
-following open-source packages (license noted; full texts ship in the JS bundle's
-`THIRD_PARTY_LICENSES` and in each package's `node_modules` entry):
+following open-source packages. The full license text of each package is available in
+its `node_modules/<pkg>/LICENSE` entry in this repository and at the package's npm /
+GitHub page. The required copyright notices are reproduced below.
 
-| Package | License |
-|---------|---------|
-| @tiptap/* (core, starter-kit, extensions) | MIT |
-| @tiptap/pm (ProseMirror) | MIT |
-| codemirror, @codemirror/* | MIT |
-| @replit/codemirror-vim | MIT |
-| katex | MIT |
-| marked | MIT |
-| mermaid | MIT |
-| lowlight | MIT |
-| highlight.js | BSD-3-Clause |
+| Package | License | Copyright |
+|---------|---------|-----------|
+| @tiptap/* (core, starter-kit, extensions) | MIT | © 2023 Tiptap GmbH |
+| @tiptap/pm (ProseMirror) | MIT | © 2015-2024 Marijn Haverbeke and others |
+| codemirror, @codemirror/* | MIT | © 2018 Marijn Haverbeke and others |
+| @replit/codemirror-vim | MIT | © Replit and contributors |
+| katex | MIT | © 2013-2020 Khan Academy and contributors |
+| marked | MIT | © 2018+ MarkedJS; © 2011-2018 Christopher Jeffrey |
+| mermaid | MIT | © 2014-2024 Knut Sveidqvist |
+| lowlight | MIT | © 2016 Titus Wormer |
+| highlight.js | BSD-3-Clause | © 2006 Ivan Sagalaev and other contributors |
 
 ---
 

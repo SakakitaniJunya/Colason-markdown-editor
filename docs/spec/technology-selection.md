@@ -173,7 +173,7 @@ npm run build   # → editor/dist/ に出力される
 
 ```bash
 CMAKE="C:/Program Files/Microsoft Visual Studio/18/Professional/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe"
-VCPKG_ROOT="c:/Users/junya.sakakitani/source/vcpkg"
+VCPKG_ROOT="<vcpkg-root>"
 QT_DIR="c:/Qt/6.8.3/msvc2022_64"
 
 "$CMAKE" -S . -B build \
@@ -221,7 +221,7 @@ QT_DIR="c:/Qt/6.8.3/msvc2022_64"
             "architecture": { "value": "x64" },
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
-                "CMAKE_TOOLCHAIN_FILE": "C:/Users/junya.sakakitani/source/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "CMAKE_TOOLCHAIN_FILE": "<vcpkg-root>/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x64-windows"
             }
         }
