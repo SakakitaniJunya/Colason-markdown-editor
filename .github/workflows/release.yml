@@ -146,8 +146,9 @@ jobs:
   # ----------------------------------------------------------------------------
   release:
     needs: [build-macos, build-windows]
-    # Windows build がまだ不安定な間も macOS だけは出せるよう、失敗を許容しない場合は
-    # needs を build-macos のみにする運用も可。現状は両方 green を要求。
+    # macOS が green なら Windows の成否に関わらず draft を生成する（macOS 先行公開方針）。
+    # Windows artifact が存在すれば自動的に同梱、無ければ macOS のみで draft を作る。
+    if: ${{ always() && needs.build-macos.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
