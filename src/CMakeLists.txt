@@ -15,8 +15,15 @@ add_executable(colason # WIN32 temporarily disabled for debugging
 )
 
 if(APPLE)
-    set_target_properties(colason PROPERTIES MACOSX_BUNDLE TRUE)
-    
+    set_target_properties(colason PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_GUI_IDENTIFIER "co.creanest.colason"
+        MACOSX_BUNDLE_BUNDLE_NAME "Colason"
+        MACOSX_BUNDLE_BUNDLE_VERSION "0.1.0"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "0.1.0"
+        MACOSX_BUNDLE_COPYRIGHT "© CreaNest"
+    )
+
     # macOS Release optimization for smaller binary
     if(CMAKE_BUILD_TYPE MATCHES Release)
         target_compile_options(colason PRIVATE -Os -flto)

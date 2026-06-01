@@ -287,7 +287,7 @@ void MainWindow::wirePane(EditorPane* pane)
             "if(!t) return;"
             "var el=document.createElement('style');"
             "el.id='colason-theme';"
-            "el.textContent=\"%1\";"
+            "el.textContent=%1;"
             "t.appendChild(el);"
             "})()"
         ).arg(jsQuote(themeCss));
@@ -312,7 +312,7 @@ void MainWindow::wirePane(EditorPane* pane)
                 "if(!document.head) return;"
                 "var el=document.getElementById('colason-theme');"
                 "if(!el){el=document.createElement('style');el.id='colason-theme';}"
-                "el.textContent=\"%1\";"
+                "el.textContent=%1;"
                 "document.head.appendChild(el);"
                 "})()"
             ).arg(jsQuote(css));
@@ -322,7 +322,7 @@ void MainWindow::wirePane(EditorPane* pane)
             QString("colasonAPI.setWideMode(%1)").arg(m_wideMode ? "true" : "false"));
         QString keybinding = m_prefs->keybinding();
         if (keybinding != "default") {
-            QString js = QString("colasonAPI.setKeybinding && colasonAPI.setKeybinding(\"%1\")").arg(jsQuote(keybinding));
+            QString js = QString("colasonAPI.setKeybinding && colasonAPI.setKeybinding(%1)").arg(jsQuote(keybinding));
             p->page()->runJavaScript(js);
         }
         if (m_zoomPercent != 100) {
@@ -512,7 +512,7 @@ void MainWindow::setupConnections()
         m_autoSaveManager->setInterval(intervalMs);
     });
     connect(m_prefs, &PreferencesManager::keybindingChanged, this, [this](const QString& keybinding) {
-        QString js = QString("colasonAPI.setKeybinding && colasonAPI.setKeybinding(\"%1\")").arg(jsQuote(keybinding));
+        QString js = QString("colasonAPI.setKeybinding && colasonAPI.setKeybinding(%1)").arg(jsQuote(keybinding));
         for (auto* p : m_panes) p->page()->runJavaScript(js);
     });
     connect(m_prefs, &PreferencesManager::themeChanged, this, [this](const QString& theme) {
@@ -523,7 +523,7 @@ void MainWindow::setupConnections()
     connect(m_sidebar, &SidebarContainer::headingClicked, this, [this](const QString& id) {
 #ifdef HAS_WEBENGINE
         if (!m_activePane) return;
-        QString js = QString("colasonAPI.scrollToHeading(\"%1\")").arg(jsQuote(id));
+        QString js = QString("colasonAPI.scrollToHeading(%1)").arg(jsQuote(id));
         m_activePane->page()->runJavaScript(js);
 #endif
     });
@@ -703,11 +703,7 @@ void MainWindow::executeEditorCommand(const QString& command, const QString& arg
 {
 #ifdef HAS_WEBENGINE
     if (!m_activePane) return;
-    QString cmd = command;
-    cmd.replace("\"", "\\\"");
-    QString args = argsJson;
-    args.replace("\"", "\\\"");
-    QString js = QString("colasonAPI.executeCommand(\"%1\", \"%2\")").arg(cmd, args);
+    QString js = QString("colasonAPI.executeCommand(%1, %2)").arg(jsQuote(command), jsQuote(argsJson));
     m_activePane->page()->runJavaScript(js);
 #else
     Q_UNUSED(command);
@@ -797,7 +793,7 @@ void MainWindow::setActivePaneMarkdown(const QString& markdown)
     if (!m_activePane) return;
     QString js = QString(
         "if(typeof colasonAPI!=='undefined' && colasonAPI.setMarkdown){"
-        "colasonAPI.setMarkdown(\"%1\");"
+        "colasonAPI.setMarkdown(%1);"
         "} else { console.error('[Colason] colasonAPI.setMarkdown not available'); }"
     ).arg(jsQuote(markdown));
     m_activePane->page()->runJavaScript(js);
@@ -812,7 +808,7 @@ void MainWindow::setActivePaneHtml(const QString& html)
     if (!m_activePane) return;
     QString js = QString(
         "if(typeof colasonAPI!=='undefined' && colasonAPI.setContent){"
-        "colasonAPI.setContent(\"%1\");"
+        "colasonAPI.setContent(%1);"
         "} else { console.error('[Colason] colasonAPI.setContent not available'); }"
     ).arg(jsQuote(html));
     m_activePane->page()->runJavaScript(js);
@@ -884,15 +880,32 @@ void MainWindow::applyTheme(const QString& themeName, const QString& css, const 
 void MainWindow::injectThemeCSS(const QString& css)
 {
 #ifdef HAS_WEBENGINE
+    // Map the Qt theme name to the web-side `data-theme` token so the
+    // tokens.css `html[data-theme='...']` overrides do not outrank
+    // the `:root` rules we inject here.
+    const QString themeName = m_themeManager->currentThemeName();
+    QString webTheme;
+    if (themeName == "light" || themeName == "github-light") {
+        webTheme = "light";
+    } else if (themeName == "sepia") {
+        webTheme = "sepia";
+    } else {
+        webTheme = "dark"; // dark / github-dark / nord / dracula / custom
+    }
+
     QString js = QString(
         "(function(){"
         "if(!document.head) return;"
         "var el=document.getElementById('colason-theme');"
-        "if(!el){el=document.createElement('style');el.id='colason-theme';}"
-        "el.textContent=\"%1\";"
-        "document.head.appendChild(el);"
+        "if(!el){el=document.createElement('style');el.id='colason-theme';document.head.appendChild(el);}"
+        "el.textContent=%1;"
+        "document.documentElement.setAttribute('data-theme', %2);"
+        "document.documentElement.setAttribute('data-theme-mode', %2);"
+        "document.documentElement.style.colorScheme = (%2 === 'dark') ? 'dark' : 'light';"
+        "try { localStorage.setItem('colason.theme', %2); } catch(e) {}"
+        "document.dispatchEvent(new CustomEvent('colason:themechange', { detail: { mode: %2, resolved: %2 } }));"
         "})()"
-    ).arg(jsQuote(css));
+    ).arg(jsQuote(css), jsQuote(webTheme));
     for (auto* p : m_panes) p->page()->runJavaScript(js);
 #else
     Q_UNUSED(css);
