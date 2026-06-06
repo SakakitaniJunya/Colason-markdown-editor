@@ -41,7 +41,12 @@ body.colason-has-sidebar #editor {
   border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   user-select: none;
   overflow: hidden;
 }
@@ -147,9 +152,10 @@ body.colason-has-sidebar #editor {
   display: inline-block;
   width: 12px;
   text-align: center;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--sidebar-muted);
   flex: 0 0 auto;
+  line-height: 1;
 }
 .colason-tree__icon {
   font-size: 13px;
@@ -198,7 +204,10 @@ body.colason-has-sidebar #editor {
   min-width: 160px;
   z-index: 1000;
   padding: 4px 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 .colason-context-menu__item {
   padding: 6px 14px;
