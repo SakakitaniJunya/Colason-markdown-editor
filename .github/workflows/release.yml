@@ -59,8 +59,10 @@ jobs:
           RES="$APP_PATH/Contents/Resources/licenses"
           mkdir -p "$RES"
           cp LICENSE THIRD_PARTY_NOTICES.md "$RES/"
-          curl -fsSL https://www.gnu.org/licenses/lgpl-3.0.txt -o "$RES/LGPL-3.0.txt"
-          curl -fsSL https://www.gnu.org/licenses/gpl-3.0.txt  -o "$RES/GPL-3.0.txt"
+          curl -fsSL --max-time 15 https://www.gnu.org/licenses/lgpl-3.0.txt -o "$RES/LGPL-3.0.txt" || \
+            echo "LGPL-3.0: https://www.gnu.org/licenses/lgpl-3.0.html" > "$RES/LGPL-3.0.txt"
+          curl -fsSL --max-time 15 https://www.gnu.org/licenses/gpl-3.0.txt  -o "$RES/GPL-3.0.txt" || \
+            cp LICENSE "$RES/GPL-3.0.txt"
 
       - name: Package DMG + ZIP (with top-level licenses/ folder)
         run: |
@@ -73,7 +75,8 @@ jobs:
           # licenses/ folder visible to the end user inside the package
           mkdir -p licenses
           cp "$GITHUB_WORKSPACE/LICENSE" "$GITHUB_WORKSPACE/THIRD_PARTY_NOTICES.md" licenses/
-          curl -fsSL https://www.gnu.org/licenses/lgpl-3.0.txt -o licenses/LGPL-3.0.txt
+          curl -fsSL --max-time 15 https://www.gnu.org/licenses/lgpl-3.0.txt -o licenses/LGPL-3.0.txt || \
+            echo "LGPL-3.0: https://www.gnu.org/licenses/lgpl-3.0.html" > licenses/LGPL-3.0.txt
 
           zip -r -9 -q "Colason-macOS-app.zip" "colason.app" licenses
           STAGE="Colason-dmg-stage"; rm -rf "$STAGE"; mkdir -p "$STAGE"
@@ -134,8 +137,8 @@ jobs:
           & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations "$dist/colason.exe"
           New-Item -ItemType Directory -Force -Path "$dist/licenses" | Out-Null
           Copy-Item LICENSE,THIRD_PARTY_NOTICES.md "$dist/licenses/"
-          Invoke-WebRequest https://www.gnu.org/licenses/lgpl-3.0.txt -OutFile "$dist/licenses/LGPL-3.0.txt"
-          Invoke-WebRequest https://www.gnu.org/licenses/gpl-3.0.txt  -OutFile "$dist/licenses/GPL-3.0.txt"
+          try { Invoke-WebRequest https://www.gnu.org/licenses/lgpl-3.0.txt -OutFile "$dist/licenses/LGPL-3.0.txt" -TimeoutSec 15 } catch { "LGPL-3.0: https://www.gnu.org/licenses/lgpl-3.0.html" | Out-File "$dist/licenses/LGPL-3.0.txt" }
+          try { Invoke-WebRequest https://www.gnu.org/licenses/gpl-3.0.txt  -OutFile "$dist/licenses/GPL-3.0.txt"  -TimeoutSec 15 } catch { Copy-Item LICENSE "$dist/licenses/GPL-3.0.txt" }
           Compress-Archive -Path "$dist/*" -DestinationPath "Colason-Windows-x64.zip" -Force
 
       - uses: actions/upload-artifact@v4
