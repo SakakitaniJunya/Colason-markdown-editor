@@ -6,6 +6,7 @@ import { mountStandaloneThemePicker } from './theme-menu';
 import { createFileManager, pushRecentFile } from './file-manager';
 import { FileTreeView } from './file-tree';
 import { simpleMarkdownToHtml } from './source-mode';
+import { OutlineView } from './outline';
 
 async function main() {
   // Apply the persisted theme before the editor is constructed so the
@@ -57,6 +58,15 @@ async function main() {
   // its `makeMenu()` can consume `buildViewThemeMenuItems()` instead and
   // this floating fallback can be removed.
   mountStandaloneThemePicker();
+
+  // Outline view (right sidebar) — heading 構造から TOC をリアルタイム生成
+  document.body.classList.add('colason-has-outline');
+  const outlineHost = document.createElement('div');
+  document.body.appendChild(outlineHost);
+  const outlineView = new OutlineView(outlineHost, editor);
+
+  // TipTap の transaction subscribe でリアルタイム更新
+  editor.on('update', () => outlineView.update());
 
   console.log('[Colason] Editor initialized');
 }

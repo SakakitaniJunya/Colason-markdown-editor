@@ -1,0 +1,199 @@
+/* ============================================================
+ * Outline Sidebar (issue #9)
+ * Heading 構造から TOC を右サイドバーとして表示
+ * ========================================================== */
+
+:root {
+  --outline-width: 220px;
+  --outline-bg: #f7f8fa;
+  --outline-fg: #24292e;
+  --outline-border: #e1e4e8;
+  --outline-hover: #eef0f3;
+  --outline-active: #d8e6ff;
+  --outline-active-fg: #0a4a9e;
+  --outline-muted: #6a737d;
+  --outline-toggle: #9ba8b5;
+}
+
+/* ---- Layout: sidebar | editor | outline ---- */
+body.colason-has-outline {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+/* サイドバー + outline 両方ある場合は sidebar は既に flex child */
+body.colason-has-sidebar.colason-has-outline #editor {
+  flex: 1 1 auto;
+  max-width: none;
+  margin: 0;
+}
+
+body.colason-has-outline .colason-outline {
+  flex: 0 0 var(--outline-width);
+}
+
+/* outline のみの場合 (サイドバー無し) は editor を flex に */
+body.colason-has-outline:not(.colason-has-sidebar) #editor {
+  flex: 1 1 auto;
+  max-width: none;
+  margin: 0;
+}
+
+/* ---- Outline root ---- */
+.colason-outline {
+  width: var(--outline-width);
+  height: 100vh;
+  background: var(--outline-bg);
+  color: var(--outline-fg);
+  border-left: 1px solid var(--outline-border);
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* ---- Header ---- */
+.colason-outline__header {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--outline-border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(180deg, #ffffff 0%, var(--outline-bg) 100%);
+  flex-shrink: 0;
+}
+
+.colason-outline__title {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--outline-muted);
+}
+
+/* ---- TOC list ---- */
+.colason-outline__list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.colason-outline__empty {
+  color: var(--outline-muted);
+  font-size: 12px;
+  padding: 12px;
+  font-style: italic;
+  text-align: center;
+}
+
+/* ---- Item row ---- */
+.colason-outline__item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  padding-right: 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  margin: 0 4px;
+  line-height: 1.4;
+  /* padding-left は JS で level に応じて設定 */
+}
+
+.colason-outline__item:hover {
+  background: var(--outline-hover);
+}
+
+/* H1 は少し目立たせる */
+.colason-outline__item[data-level="1"] .colason-outline__label {
+  font-weight: 600;
+}
+
+/* ---- Toggle button (H2) ---- */
+.colason-outline__toggle {
+  background: transparent;
+  border: none;
+  padding: 0;
+  width: 14px;
+  height: 14px;
+  font-size: 9px;
+  color: var(--outline-toggle);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 2px;
+  line-height: 1;
+}
+
+.colason-outline__toggle:hover {
+  color: var(--outline-fg);
+  background: var(--outline-hover);
+}
+
+.colason-outline__toggle-spacer {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* ---- Label ---- */
+.colason-outline__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  font-size: 12px;
+}
+
+/* ---- Scrollbar ---- */
+.colason-outline__list::-webkit-scrollbar {
+  width: 4px;
+}
+.colason-outline__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.colason-outline__list::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb, #cccccc);
+  border-radius: 2px;
+}
+.colason-outline__list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover, #999999);
+}
+
+/* ---- Dark theme ---- */
+[data-theme="dark"] {
+  --outline-bg: #1e1e1e;
+  --outline-fg: #d4d4d4;
+  --outline-border: #3a3a3a;
+  --outline-hover: #2a2a2a;
+  --outline-active: #264f78;
+  --outline-active-fg: #9cdcfe;
+  --outline-muted: #858585;
+  --outline-toggle: #6a6a6a;
+}
+
+[data-theme="dark"] .colason-outline__header {
+  background: linear-gradient(180deg, #252525 0%, var(--outline-bg) 100%);
+}
+
+/* ---- Sepia theme ---- */
+[data-theme="sepia"] {
+  --outline-bg: #f4efe8;
+  --outline-fg: #4a3f35;
+  --outline-border: #d8cfc7;
+  --outline-hover: #ede8e0;
+  --outline-active: #ddd0bc;
+  --outline-active-fg: #3b2f20;
+  --outline-muted: #8a7b6d;
+  --outline-toggle: #a89070;
+}
+
+[data-theme="sepia"] .colason-outline__header {
+  background: linear-gradient(180deg, #faf6f0 0%, var(--outline-bg) 100%);
+}
