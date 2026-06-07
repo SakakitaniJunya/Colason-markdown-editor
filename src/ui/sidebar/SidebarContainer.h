@@ -26,6 +26,7 @@ signals:
     void fileSelected(const QString& filePath);
     void headingClicked(const QString& id);
     void openFolderRequested();
+    void newFileCreated(const QString& filePath);
 
 private:
     void setupUI();

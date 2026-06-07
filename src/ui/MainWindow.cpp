@@ -529,6 +529,7 @@ void MainWindow::setupConnections()
     });
 
     connect(m_sidebar, &SidebarContainer::openFolderRequested, this, &MainWindow::openFolder);
+    connect(m_sidebar, &SidebarContainer::newFileCreated, this, &MainWindow::openFileFromExplorer);
 
     // Sidebar -> Open file in active pane
     connect(m_sidebar, &SidebarContainer::fileSelected, this, [this](const QString& path) {
@@ -584,6 +585,30 @@ void MainWindow::openFolder()
     if (dir.isEmpty()) return;
     m_recentFiles->addFolder(dir);
     m_sidebar->setRootPath(dir);
+}
+
+void MainWindow::openFileFromExplorer(const QString& path)
+{
+    if (!m_activePane) return;
+    QFileInfo fi(path);
+    if (!fi.exists()) return;
+
+    // If it's an empty new file, open it without loading markdown
+    if (fi.size() == 0) {
+        m_activePane->docManager()->openDocument(path);
+        m_recentFiles->addFile(path);
+        setActivePaneHtml("<p></p>");
+        m_sidebar->setCurrentFile(path);
+        updateTitle();
+        return;
+    }
+
+    bool ok = m_activePane->docManager()->openDocument(path);
+    if (!ok) return;
+    m_recentFiles->addFile(path);
+    setActivePaneMarkdown(m_activePane->docManager()->currentContent());
+    m_sidebar->setCurrentFile(path);
+    updateTitle();
 }
 
 void MainWindow::saveFile()

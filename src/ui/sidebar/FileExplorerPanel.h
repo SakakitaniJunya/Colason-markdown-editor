@@ -22,6 +22,7 @@ public:
 signals:
     void fileSelected(const QString& filePath);
     void openFolderRequested();
+    void newFileCreated(const QString& filePath);
 
 private slots:
     void onItemClicked(const QModelIndex& index);
@@ -29,7 +30,10 @@ private slots:
 
 private:
     void setupUI();
-    void setupContextMenu();
+    void createNewFile();
+    void createNewFolder();
+    void renameCurrentItem();
+    void deleteCurrentItem();
 
     QStackedWidget* m_stack = nullptr;
     QWidget* m_placeholder = nullptr;
@@ -37,5 +41,6 @@ private:
     QLabel* m_folderLabel = nullptr;
     QTreeView* m_treeView = nullptr;
     QFileSystemModel* m_model = nullptr;
-    QMenu* m_contextMenu = nullptr;
+
+    QString m_pendingNewFilePath; // path of file being named inline
 };

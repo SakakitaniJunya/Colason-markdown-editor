@@ -35,6 +35,7 @@ public slots:
     void newDocument();
     void openFile();
     void openFolder();
+    void openFileFromExplorer(const QString& path);
     void saveFile();
     void saveFileAs();
     void toggleSidebar();

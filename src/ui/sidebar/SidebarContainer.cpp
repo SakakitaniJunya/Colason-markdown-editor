@@ -44,6 +44,8 @@ void SidebarContainer::setupUI()
             this, &SidebarContainer::headingClicked);
     connect(m_fileExplorer, &FileExplorerPanel::openFolderRequested,
             this, &SidebarContainer::openFolderRequested);
+    connect(m_fileExplorer, &FileExplorerPanel::newFileCreated,
+            this, &SidebarContainer::newFileCreated);
 }
 
 void SidebarContainer::setRootPath(const QString& path)
