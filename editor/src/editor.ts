@@ -19,6 +19,7 @@ import { common, createLowlight } from 'lowlight';
 import { MermaidBlock } from './extensions/mermaid-block';
 import { KaTeXBlock } from './extensions/katex-block';
 import { KaTeXInline } from './extensions/katex-inline';
+import { MarkdownPaste } from './extensions/markdown-paste';
 import {
   notifyContentChanged,
   notifyWordCount,
@@ -66,6 +67,7 @@ export function createEditor(element: HTMLElement): Editor {
       MermaidBlock,
       KaTeXBlock,
       KaTeXInline,
+      MarkdownPaste,
     ],
     content: '<p></p>',
     autofocus: true,
